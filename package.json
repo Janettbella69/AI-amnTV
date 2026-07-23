@@ -1,0 +1,32 @@
+{
+  "name": "ai-amntv",
+  "version": "0.1.0",
+  "description": "Local-first AI vertical anime drama production pipeline",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "amntv": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node --import tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "verify": "node --import tsx scripts/verify-dry-run.ts",
+    "check": "npm run typecheck && npm test && npm run build && npm run verify"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.218",
+    "sharp": "^0.35.3",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+
+# Runtime projects and generated media are reproducible and can be very large.
+projects/
+coverage/
