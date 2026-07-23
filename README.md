@@ -169,8 +169,8 @@ flowchart LR
 breakdown 和视觉判断。文件系统是唯一事实源，SQLite 只承担 Studio 任务调度，方便人工检查、
 版本控制与故障恢复。
 
-详细说明见 [架构文档](docs/architecture.md)、[供应商接入](docs/provider-guide.md)和
-[竞品参考边界](docs/competitive-notes.md)。
+详细说明见 [架构文档](docs/architecture.md)、[视听表演质量规范](docs/production-quality.md)、
+[供应商接入](docs/provider-guide.md)和[竞品参考边界](docs/competitive-notes.md)。
 
 ## 重要边界
 
