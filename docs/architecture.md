@@ -8,6 +8,24 @@
 4. 剧本锁定后，既有场号与台词 ID 只能保留；删场用 `omitted`，插入用字母后缀。
 5. 分镜批准后，既有卡号不可删除或重排。
 6. 云视频先记任务再提交；进程中断后标记 `orphaned`，不自动重提。
+7. Studio 的 SQLite 只保存任务调度状态；业务文档、关卡、成本和交付仍以项目文件为准。
+
+## Studio 分层
+
+```mermaid
+flowchart LR
+  UI["React Studio"] -->|REST 写入 / SSE 订阅| API["Fastify 本地 API"]
+  API --> Queue["SQLite 任务队列"]
+  Queue --> Worker["单进程 Pipeline Worker"]
+  Worker --> Core["TypeScript 状态机与 Provider"]
+  API --> Files["YAML / 媒体事实源"]
+  Core --> Files
+```
+
+- Web 界面由 Vite 构建到 `dist-web/`，生产模式与 API 同源，避免额外跨域配置。
+- API 默认只绑定 `127.0.0.1:4317`，并从 `/media/` 提供项目媒体预览。
+- 队列串行 claim 任务，同一分集/阶段的排队或运行任务会去重。
+- SSE 只传递任务和工作区失效通知；刷新后可从 SQLite 与项目文件完整恢复。
 
 ## 目录
 
@@ -53,6 +71,10 @@ pending
 
 失败进入 `failed`。局部关键帧重做回到 `audio_ready`；只重做视频回到
 `keyframe_selected`。这两种操作都会清除旧成片批准和交付记录。
+
+锁定剧本内容被修改时，相关场景的卡回到 `pending`，剧本、分镜、圈图与成片关卡撤销；其他场景
+的卡保持原状态。批准分镜被修改时，只有变化卡回到 `pending`，分镜状态回到 `draft`，剧本与定妆
+关卡保留。音频文件元数据回填不被视为剧本内容修改，内部时长回填也不会误撤销分镜批准。
 
 ## 视频付费门禁
 

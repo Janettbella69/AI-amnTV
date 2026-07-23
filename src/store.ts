@@ -57,6 +57,62 @@ function assertLockedScriptIdsStable(previous: Script, next: Script): void {
   }
 }
 
+function scriptChanges(
+  previous: Script,
+  next: Script,
+): { changed: boolean; global: boolean; sceneIds: Set<string> } {
+  const previousGlobal = {
+    title: previous.title,
+    emotionContract: previous.emotionContract,
+  };
+  const nextGlobal = {
+    title: next.title,
+    emotionContract: next.emotionContract,
+  };
+  const global = JSON.stringify(previousGlobal) !== JSON.stringify(nextGlobal);
+  const sceneIds = new Set<string>();
+  const ids = new Set([
+    ...previous.scenes.map((scene) => scene.id),
+    ...next.scenes.map((scene) => scene.id),
+    ...previous.manifests.map((manifest) => manifest.sceneId),
+    ...next.manifests.map((manifest) => manifest.sceneId),
+  ]);
+  for (const id of ids) {
+    const stripAudio = (script: Script) => {
+      const scene = script.scenes.find((item) => item.id === id);
+      if (!scene) return undefined;
+      return {
+        ...scene,
+        dialogue: scene.dialogue.map(({ audio: _audio, ...line }) => line),
+      };
+    };
+    const before = {
+      scene: stripAudio(previous),
+      manifest: previous.manifests.find((item) => item.sceneId === id),
+    };
+    const after = {
+      scene: stripAudio(next),
+      manifest: next.manifests.find((item) => item.sceneId === id),
+    };
+    if (JSON.stringify(before) !== JSON.stringify(after)) sceneIds.add(id);
+  }
+  return { changed: global || sceneIds.size > 0, global, sceneIds };
+}
+
+function changedStoryboardCuts(previous: Storyboard, next: Storyboard): Set<string> {
+  const changed = new Set<string>();
+  const ids = new Set([
+    ...previous.cuts.map((cut) => cut.id),
+    ...next.cuts.map((cut) => cut.id),
+  ]);
+  for (const id of ids) {
+    const before = previous.cuts.find((cut) => cut.id === id);
+    const after = next.cuts.find((cut) => cut.id === id);
+    if (JSON.stringify(before) !== JSON.stringify(after)) changed.add(id);
+  }
+  return changed;
+}
+
 const transitions: Record<CutStage, CutStage[]> = {
   pending: ['audio_ready'],
   audio_ready: ['keyframes_ready'],
@@ -132,8 +188,17 @@ export class ProjectStore {
     return fs.existsSync(file) ? LocationSchema.parse(readYaml(file)) : undefined;
   }
 
-  saveLocation(value: Location): void {
-    writeYaml(this.paths.locationFile(value.id), LocationSchema.parse(value));
+  saveLocation(value: Location, allowLockedUpdate = false): void {
+    const next = LocationSchema.parse(value);
+    const existing = this.location(next.id);
+    if (existing?.status === 'locked' && !allowLockedUpdate) {
+      const comparableExisting = { ...existing, lockedAt: undefined };
+      const comparableNext = { ...next, lockedAt: undefined };
+      if (JSON.stringify(comparableExisting) !== JSON.stringify(comparableNext)) {
+        throw new Error(`场景 ${next.id} 已锁定；修改需显式解锁并使下游产物失效`);
+      }
+    }
+    writeYaml(this.paths.locationFile(next.id), next);
   }
 
   script(episodeId: string): Script {
@@ -143,19 +208,32 @@ export class ProjectStore {
   saveScript(value: Script): void {
     const next = ScriptSchema.parse(value);
     const file = this.paths.scriptFile(next.episodeId);
+    let changes:
+      | { changed: boolean; global: boolean; sceneIds: Set<string> }
+      | undefined;
     if (fs.existsSync(file)) {
-      assertLockedScriptIdsStable(ScriptSchema.parse(readYaml(file)), next);
+      const previous = ScriptSchema.parse(readYaml(file));
+      assertLockedScriptIdsStable(previous, next);
+      if (previous.status === 'locked') changes = scriptChanges(previous, next);
     }
     writeYaml(file, next);
+    if (changes?.changed) {
+      this.invalidateAfterScriptChange(next.episodeId, changes);
+    }
   }
 
   storyboard(episodeId: string): Storyboard {
     return StoryboardSchema.parse(readYaml(this.paths.storyboardFile(episodeId)));
   }
 
-  saveStoryboard(value: Storyboard): void {
-    const next = StoryboardSchema.parse(value);
+  saveStoryboard(
+    value: Storyboard,
+    options: { preserveApproval?: boolean } = {},
+  ): void {
+    let next = StoryboardSchema.parse(value);
     const file = this.paths.storyboardFile(next.episodeId);
+    let changedCutIds = new Set<string>();
+    let approvalRevoked = false;
     if (fs.existsSync(file)) {
       const old = StoryboardSchema.parse(readYaml(file));
       if (old.status === 'approved') {
@@ -164,9 +242,91 @@ export class ProjectStore {
         if (!orderedSubsequence(oldIds, nextIds)) {
           throw new Error('批准后的既有卡号不可删除或重排；插卡请使用字母后缀');
         }
+        changedCutIds = changedStoryboardCuts(old, next);
+        const explicitlyDrafted = next.status !== 'approved';
+        if (
+          !options.preserveApproval &&
+          (changedCutIds.size > 0 || explicitlyDrafted)
+        ) {
+          next = { ...next, status: 'draft' };
+          delete next.approvedAt;
+          approvalRevoked = true;
+        }
       }
     }
     writeYaml(file, next);
+    if (approvalRevoked) {
+      this.invalidateAfterStoryboardChange(next.episodeId, changedCutIds);
+    }
+  }
+
+  private invalidateAfterScriptChange(
+    episodeId: string,
+    changes: { global: boolean; sceneIds: Set<string> },
+  ): void {
+    const storyboardFile = this.paths.storyboardFile(episodeId);
+    let storyboard: Storyboard | undefined;
+    if (fs.existsSync(storyboardFile)) {
+      storyboard = StoryboardSchema.parse(readYaml(storyboardFile));
+      if (storyboard.status === 'approved') {
+        const draft = { ...storyboard, status: 'draft' as const };
+        delete draft.approvedAt;
+        writeYaml(storyboardFile, draft);
+        storyboard = draft;
+      }
+    }
+    const stateFile = this.paths.stateFile(episodeId);
+    if (!fs.existsSync(stateFile)) return;
+    const state = this.state(episodeId);
+    const affectedCutIds = changes.global
+      ? new Set(Object.keys(state.cuts))
+      : new Set(
+          storyboard?.cuts
+            .filter((cut) => changes.sceneIds.has(cut.sceneId))
+            .map((cut) => cut.id) ?? [],
+        );
+    const reason = changes.global
+      ? '剧本全局信息变更'
+      : `剧本场景变更：${[...changes.sceneIds].join('、')}`;
+    this.resetAffectedCuts(state, affectedCutIds, reason);
+    delete state.gates.script;
+    delete state.gates.storyboard;
+    delete state.gates.visual;
+    delete state.gates.final;
+    delete state.delivery;
+    this.saveState(state);
+  }
+
+  private invalidateAfterStoryboardChange(
+    episodeId: string,
+    changedCutIds: Set<string>,
+  ): void {
+    const stateFile = this.paths.stateFile(episodeId);
+    if (!fs.existsSync(stateFile)) return;
+    const state = this.state(episodeId);
+    this.resetAffectedCuts(state, changedCutIds, '分镜内容变更');
+    delete state.gates.storyboard;
+    delete state.gates.visual;
+    delete state.gates.final;
+    delete state.delivery;
+    this.saveState(state);
+  }
+
+  private resetAffectedCuts(
+    state: EpisodeState,
+    cutIds: Set<string>,
+    reason: string,
+  ): void {
+    const at = new Date().toISOString();
+    for (const cutId of cutIds) {
+      const entry = state.cuts[cutId];
+      if (!entry) continue;
+      entry.stage = 'pending';
+      entry.updatedAt = at;
+      entry.selectedKeyframes = [];
+      delete entry.selectedVideo;
+      if (!entry.staleReasons.includes(reason)) entry.staleReasons.push(reason);
+    }
   }
 
   state(episodeId: string): EpisodeState {

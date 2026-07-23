@@ -60,6 +60,97 @@ test('locked script identifiers cannot be deleted or reordered', (context) => {
   assert.throws(() => store.saveScript(script), /既有场号不可删除或重排/);
 });
 
+test('editing a locked script invalidates only cuts from the changed scene', (context) => {
+  const { root, store } = fixture();
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const at = new Date().toISOString();
+  const script = store.script('EP01');
+  script.status = 'locked';
+  script.lockedAt = at;
+  store.saveScript(script);
+  const storyboard = store.storyboard('EP01');
+  storyboard.status = 'approved';
+  storyboard.approvedAt = at;
+  store.saveStoryboard(storyboard);
+  const state = store.state('EP01');
+  for (const entry of Object.values(state.cuts)) {
+    entry.stage = 'composited';
+    entry.selectedKeyframes = ['/tmp/first.png'];
+    entry.selectedVideo = '/tmp/take.mp4';
+  }
+  state.gates = {
+    script: { at, by: 'human' },
+    cast: { at, by: 'human' },
+    storyboard: { at, by: 'human' },
+    visual: { at, by: 'human' },
+    final: { at, by: 'human' },
+  };
+  state.delivery = {
+    finalVideo: '/tmp/final.mp4',
+    subtitles: '/tmp/final.srt',
+    cover: '/tmp/cover.jpg',
+    aigcLabel: 'burned',
+    jianyingDraft: '/tmp/draft',
+    durationSec: 60,
+    qcPassedAt: at,
+  };
+  store.saveState(state);
+
+  const revisedScript = store.script('EP01');
+  revisedScript.scenes[0]!.dialogue[0]!.text = '婚事作罢。';
+  store.saveScript(revisedScript);
+
+  const revised = store.state('EP01');
+  assert.equal(revised.cuts['EP01_S01_C001']!.stage, 'pending');
+  assert.equal(revised.cuts['EP01_S02_C004']!.stage, 'composited');
+  assert.equal(revised.cuts['EP01_S01_C001']!.selectedVideo, undefined);
+  assert.ok(revised.gates.cast);
+  assert.equal(revised.gates.script, undefined);
+  assert.equal(revised.gates.storyboard, undefined);
+  assert.equal(revised.gates.visual, undefined);
+  assert.equal(revised.gates.final, undefined);
+  assert.equal(revised.delivery, undefined);
+  assert.equal(store.storyboard('EP01').status, 'draft');
+});
+
+test('editing an approved storyboard invalidates only its changed cut', (context) => {
+  const { root, store } = fixture();
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const at = new Date().toISOString();
+  const storyboard = store.storyboard('EP01');
+  storyboard.status = 'approved';
+  storyboard.approvedAt = at;
+  store.saveStoryboard(storyboard);
+  const state = store.state('EP01');
+  for (const entry of Object.values(state.cuts)) {
+    entry.stage = 'composited';
+    entry.selectedKeyframes = ['/tmp/first.png'];
+    entry.selectedVideo = '/tmp/take.mp4';
+  }
+  state.gates = {
+    script: { at, by: 'human' },
+    cast: { at, by: 'human' },
+    storyboard: { at, by: 'human' },
+    visual: { at, by: 'human' },
+    final: { at, by: 'human' },
+  };
+  store.saveState(state);
+
+  const revisedStoryboard = store.storyboard('EP01');
+  revisedStoryboard.cuts[0]!.action = '女主抬高账本，直视镜头';
+  store.saveStoryboard(revisedStoryboard);
+
+  const revised = store.state('EP01');
+  assert.equal(store.storyboard('EP01').status, 'draft');
+  assert.equal(revised.cuts['EP01_S01_C001']!.stage, 'pending');
+  assert.equal(revised.cuts['EP01_S01_C002']!.stage, 'composited');
+  assert.ok(revised.gates.script);
+  assert.ok(revised.gates.cast);
+  assert.equal(revised.gates.storyboard, undefined);
+  assert.equal(revised.gates.visual, undefined);
+  assert.equal(revised.gates.final, undefined);
+});
+
 test('local retake invalidates only the requested downstream state', (context) => {
   const { root, store } = fixture();
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));

@@ -8,25 +8,40 @@
     "amntv": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && vite build",
     "dev": "node --import tsx src/cli.ts",
-    "typecheck": "tsc --noEmit",
+    "studio": "node --import tsx src/studio/server.ts",
+    "studio:api": "AMNTV_NO_OPEN=1 node --import tsx src/studio/server.ts",
+    "studio:web": "vite",
+    "studio:dev": "concurrently -k -n api,web -c yellow,cyan \"npm:studio:api\" \"npm:studio:web\"",
+    "typecheck": "tsc --noEmit && tsc -p web/tsconfig.json --noEmit",
     "test": "node --import tsx --test test/**/*.test.ts",
     "verify": "node --import tsx scripts/verify-dry-run.ts",
     "check": "npm run typecheck && npm test && npm run build && npm run verify"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.218",
+    "@fastify/static": "^10.1.2",
+    "better-sqlite3": "^13.0.1",
+    "fastify": "^5.10.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "sharp": "^0.35.3",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.4",
+    "concurrently": "^9.2.4",
     "tsx": "^4.23.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5"
   }
 }

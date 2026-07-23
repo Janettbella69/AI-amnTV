@@ -30,6 +30,7 @@ import { createProviders } from './providers/index.js';
 import { openReview } from './review/html.js';
 import { ProjectStore } from './store.js';
 import { assertMediaTools } from './media/ffmpeg.js';
+import { startStudioServer } from './studio/server.js';
 
 const help = `AI-amnTV · 本地优先 AI 漫剧生产 CLI
 
@@ -62,6 +63,7 @@ const help = `AI-amnTV · 本地优先 AI 漫剧生产 CLI
   amntv doctor
   amntv demo [series]
   amntv demo-run [series]          # 仅 dry-run 自动关卡，用于 CI/验收
+  amntv studio                     # 启动本地 Web 工作台
 `;
 
 function flag(args: string[], name: string): string | undefined {
@@ -108,6 +110,10 @@ async function main(): Promise<void> {
         'ffmpeg/ffprobe: ready',
       ].join('\n'),
     );
+    return;
+  }
+  if (command === 'studio') {
+    await startStudioServer(config);
     return;
   }
   if (command === 'init') {

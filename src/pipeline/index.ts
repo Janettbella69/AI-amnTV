@@ -264,10 +264,6 @@ export async function approveScript(
   assertValid(validateScript(script), '剧本');
   script.status = 'locked';
   script.lockedAt = now();
-  store.saveScript(script);
-  const state = store.state(episodeId);
-  state.gates.script = approval('场号与台词 ID 自此锁定');
-  store.saveState(state);
   const manifests =
     script.manifests.length > 0
       ? script.manifests
@@ -276,6 +272,9 @@ export async function approveScript(
         : (await tagBreakdown(config, script)).manifests;
   script.manifests = manifests;
   store.saveScript(script);
+  const state = store.state(episodeId);
+  state.gates.script = approval('场号与台词 ID 自此锁定');
+  store.saveState(state);
   log('关卡①已通过；breakdown 资产清单已生成');
 }
 
@@ -494,7 +493,7 @@ export function approveStoryboard(store: ProjectStore, episodeId: string): void 
   );
   storyboard.status = 'approved';
   storyboard.approvedAt = now();
-  store.saveStoryboard(storyboard);
+  store.saveStoryboard(storyboard, { preserveApproval: true });
   store.initCuts(episodeId, storyboard.cuts);
   state.gates.storyboard = approval('关卡②的分镜表部分');
   store.saveState(state);
@@ -582,7 +581,7 @@ export async function audioStage(
     }
   }
   store.saveScript(script);
-  store.saveStoryboard(storyboard);
+  store.saveStoryboard(storyboard, { preserveApproval: true });
   assertValid(
     validateStoryboard(store.series(), script, storyboard),
     '音频回填后的分镜',
@@ -761,7 +760,7 @@ export function requestRetake(
   cut.promptDelta = [cut.promptDelta, `局部调整：${trimmed}`]
     .filter(Boolean)
     .join('；');
-  store.saveStoryboard(storyboard);
+  store.saveStoryboard(storyboard, { preserveApproval: true });
   const round = store.resetCutForRetake(
     episodeId,
     cutId,

@@ -1,13 +1,15 @@
 # AI-amnTV
 
 本地优先的 AI 竖屏漫剧生产工具。它把剧本、定妆、分镜、配音、关键帧、图生视频、作监检查、
-合成和交付串成一条可恢复、可审核、可核算成本的 CLI 流水线。
+合成和交付串成一条可恢复、可审核、可核算成本的生产线，同时提供 Web Studio 和 CLI。
 
 项目按 `docs/specs/2026-07-24-manju-studio-design.md` 的产品约束独立实现，没有复用
 `manju-studio` 的代码或提交历史。
 
 ## 已实现
 
+- React Web Studio：总览、结构化剧本/分镜编辑、资产库、圈图、任务、成本和交付
+- Fastify 本地 API、SQLite 持久任务队列与 SSE 实时进度；重启不重复提交付费任务
 - 60–120 秒、1080×1920、15–25 卡的硬校验
 - 四个人工关卡：剧本 → 定妆 → 分镜与关键帧 → 成片
 - 系列级角色、音色、场景资产锁定；锁定后的场号、台词 ID、卡号不可重排
@@ -21,9 +23,38 @@
 - 最终 MP4、SRT、封面、QC 报告、稳定时间线和实验性剪映草稿
 - ComfyUI 出图、MiniMax TTS/视频适配器，以及零云成本 dry-run 适配器
 
+## Web Studio
+
+构建并启动本地工作台：
+
+```bash
+npm ci
+npm run build
+AMNTV_DRY_RUN=1 npm run dev -- studio
+```
+
+浏览器会打开 `http://127.0.0.1:4317`。Studio 只监听本机回环地址；项目 YAML 与媒体文件仍是
+事实源，SQLite 只保存可恢复的后台任务。开发界面时可运行：
+
+```bash
+AMNTV_DRY_RUN=1 npm run studio:dev
+```
+
+工作台包含：
+
+- 制作总览与人工关卡状态
+- 剧本、分镜结构化编辑与 Claude Agent SDK 任务入口
+- 角色、场景、音色和候选资产管理
+- 关键帧候选圈选、逐卡视频进度和局部重做
+- 已知/未知成本账本、最终视频预览与交付下载
+- graphite、paper、projector 三套视觉环境和两档信息密度
+
+已批准内容被修改时，系统会撤销相关下游关卡：剧本只重置被改场景的镜头，分镜只重置被改卡，
+未受影响的 take 和状态保留。
+
 ## 快速验收
 
-要求 Node.js 20+、FFmpeg 和 FFprobe。
+要求 Node.js 22.12+、FFmpeg 和 FFprobe。
 
 ```bash
 npm ci
@@ -120,7 +151,8 @@ flowchart LR
 ```
 
 确定性编排、校验、状态迁移和文件写入全部由 TypeScript 完成；Agent 只负责创作、审稿、分镜、
-breakdown 和视觉判断。文件系统是唯一事实源，方便人工检查、版本控制与故障恢复。
+breakdown 和视觉判断。文件系统是唯一事实源，SQLite 只承担 Studio 任务调度，方便人工检查、
+版本控制与故障恢复。
 
 详细说明见 [架构文档](docs/architecture.md)、[供应商接入](docs/provider-guide.md)和
 [竞品参考边界](docs/competitive-notes.md)。

@@ -16,6 +16,9 @@ export interface AppConfig {
   comfyWorkflow?: string;
   comfyInputDir?: string;
   frameUrlManifest?: string;
+  studioHost: string;
+  studioPort: number;
+  studioDatabase: string;
 }
 
 function bool(value: string | undefined, fallback = false): boolean {
@@ -60,7 +63,25 @@ export function getConfig(cwd = process.cwd()): AppConfig {
     minimaxApiBase: process.env.MINIMAX_API_BASE ?? 'https://api.minimaxi.com',
     minimaxTtsModel: process.env.MINIMAX_TTS_MODEL ?? 'speech-2.8-hd',
     minimaxVideoModel: process.env.MINIMAX_VIDEO_MODEL ?? 'MiniMax-Hailuo-2.3',
+    studioHost: process.env.AMNTV_STUDIO_HOST ?? '127.0.0.1',
+    studioPort: Number(process.env.AMNTV_STUDIO_PORT ?? 4317),
+    studioDatabase: path.resolve(
+      cwd,
+      process.env.AMNTV_STUDIO_DB ??
+        path.join(
+          process.env.AMNTV_PROJECTS ?? 'projects',
+          '.studio',
+          'studio.db',
+        ),
+    ),
   };
+  if (
+    !Number.isInteger(config.studioPort) ||
+    config.studioPort < 1 ||
+    config.studioPort > 65535
+  ) {
+    throw new Error(`AMNTV_STUDIO_PORT 无效: ${config.studioPort}`);
+  }
   const anthropicApiKey = optional(process.env.ANTHROPIC_API_KEY);
   const minimaxApiKey = optional(process.env.MINIMAX_API_KEY);
   const comfyUrl = optional(process.env.COMFYUI_URL);
