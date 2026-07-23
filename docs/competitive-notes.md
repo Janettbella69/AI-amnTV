@@ -9,6 +9,7 @@
 | 即梦 | 文生/图生视频、首尾帧控制、偏中文的创作入口 | `first_frame` / `first_last` 模式；中文八段式 prompt；视频付费前检查参考帧 |
 | 即梦智能画布 | 生成后继续扩图、局部编辑、消除等迭代方式 | `revise keyframe/video` 单卡局部重做；旧 round/take 永不覆盖 |
 | 可灵 | 作为用户指定的对照产品与未来云视频候选 | 通过 `VideoProvider` 保持可替换；未在缺少可核验官方接口资料时伪造适配器 |
+| LibTV | OpenAPI 会话、远端 Agent 创作、项目画布、素材上传与结果下载 | 受控外部创作台：本地先落盘、显式上传、同会话续作、手动回收、结果晋升与同量表评测；AI-amnTV 继续掌管审核和交付 |
 
 资料：
 
@@ -16,6 +17,9 @@
 - [即梦（剪映域名入口）](https://jimeng.jianying.com/)
 - [火山引擎：即梦图生视频首尾帧 API](https://www.volcengine.com/docs/85621/1791184?lang=zh)
 - [火山引擎：即梦图生视频 API](https://www.volcengine.com/docs/85621/1802721?lang=zh)
+- [LibTV Skills 仓库](https://github.com/libtv-labs/libtv-skills)
+
+LibTV 的当前对标范围、已落地代码和未完成差距见 [LibTV 对标说明](libtv-benchmark.md)。
 
 由于可灵官方开发者页面在本次环境中无法可靠读取，本仓库只保留标准 provider 扩展点，不写未经
 核实的模型名、价格、参数或接口路径。

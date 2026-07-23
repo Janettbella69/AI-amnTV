@@ -25,9 +25,18 @@ import {
 import { ProjectStore } from '../store.js';
 import { jobTypes, StudioDatabase } from './db.js';
 import { StudioEvents } from './events.js';
+import {
+  listBenchmarkCandidates,
+  listBenchmarks,
+  listEvaluations,
+  runBenchmark,
+  runEvaluation,
+} from './evaluation.js';
 import { commitImport, previewImport } from './imports.js';
+import { LibTvStudioService } from './libtv.js';
 import { listSeries, workspaceView } from './project-view.js';
 import { PipelineWorker } from './worker.js';
+import { workflowView } from './workflow.js';
 
 const SeriesParams = z.object({ series: z.string().min(1) });
 const EpisodeParams = z.object({
@@ -68,6 +77,7 @@ export async function buildStudioServer(
   const database = new StudioDatabase(config.studioDatabase);
   const events = new StudioEvents();
   const worker = new PipelineWorker(config, database, events);
+  const libtv = new LibTvStudioService(config);
   worker.start();
 
   app.setErrorHandler((error, _request, reply) => {
@@ -88,6 +98,7 @@ export async function buildStudioServer(
   }));
 
   app.get('/api/series', async () => ({ series: listSeries(config) }));
+  app.get('/api/libtv/status', async () => libtv.status());
 
   app.post('/api/imports/preview', async (request) =>
     previewImport(config, request.body),
@@ -129,6 +140,161 @@ export async function buildStudioServer(
     const params = EpisodeParams.parse(request.params);
     return workspaceView(config, params.series, params.episode);
   });
+
+  app.get('/api/series/:series/episodes/:episode/workflow', async (request) => {
+    const params = EpisodeParams.parse(request.params);
+    const store = new ProjectStore(config.projectsRoot, params.series);
+    const sessions = libtv.list(store, params.episode);
+    const evaluations = listEvaluations(store, params.episode);
+    return workflowView(
+      store,
+      params.episode,
+      database.list({
+        seriesId: params.series,
+        episodeId: params.episode,
+        limit: 200,
+      }),
+      sessions,
+      evaluations,
+    );
+  });
+
+  app.get(
+    '/api/series/:series/episodes/:episode/evaluations',
+    async (request) => {
+      const params = EpisodeParams.parse(request.params);
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      return { evaluations: listEvaluations(store, params.episode) };
+    },
+  );
+
+  app.post(
+    '/api/series/:series/episodes/:episode/evaluations',
+    async (request, reply) => {
+      const params = EpisodeParams.parse(request.params);
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      const evaluation = runEvaluation(store, params.episode, request.body);
+      notifyWorkspace(events, params.series, params.episode);
+      return reply.status(201).send(evaluation);
+    },
+  );
+
+  app.get(
+    '/api/series/:series/episodes/:episode/benchmarks/candidates',
+    async (request) => {
+      const params = EpisodeParams.parse(request.params);
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      return {
+        candidates: listBenchmarkCandidates(
+          config,
+          store,
+          params.episode,
+          libtv.list(store, params.episode),
+        ),
+      };
+    },
+  );
+
+  app.get(
+    '/api/series/:series/episodes/:episode/benchmarks',
+    async (request) => {
+      const params = EpisodeParams.parse(request.params);
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      return { benchmarks: listBenchmarks(store, params.episode) };
+    },
+  );
+
+  app.post(
+    '/api/series/:series/episodes/:episode/benchmarks',
+    async (request, reply) => {
+      const params = EpisodeParams.parse(request.params);
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      const candidates = listBenchmarkCandidates(
+        config,
+        store,
+        params.episode,
+        libtv.list(store, params.episode),
+      );
+      const benchmark = await runBenchmark(
+        config,
+        store,
+        params.episode,
+        candidates,
+        request.body,
+      );
+      return reply.status(201).send(benchmark);
+    },
+  );
+
+  app.get(
+    '/api/series/:series/episodes/:episode/libtv/sessions',
+    async (request) => {
+      const params = EpisodeParams.parse(request.params);
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      return { status: libtv.status(), sessions: libtv.list(store, params.episode) };
+    },
+  );
+
+  app.post(
+    '/api/series/:series/episodes/:episode/libtv/sessions',
+    async (request, reply) => {
+      const params = EpisodeParams.parse(request.params);
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      const session = await libtv.create(store, params.episode, request.body);
+      return reply.status(201).send(session);
+    },
+  );
+
+  app.post(
+    '/api/series/:series/episodes/:episode/libtv/sessions/:id/refresh',
+    async (request) => {
+      const params = EpisodeParams.extend({ id: z.string().uuid() }).parse(
+        request.params,
+      );
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      return libtv.refresh(store, params.episode, params.id);
+    },
+  );
+
+  app.post(
+    '/api/series/:series/episodes/:episode/libtv/sessions/:id/continue',
+    async (request) => {
+      const params = EpisodeParams.extend({ id: z.string().uuid() }).parse(
+        request.params,
+      );
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      return libtv.continue(store, params.episode, params.id, request.body);
+    },
+  );
+
+  app.post(
+    '/api/series/:series/episodes/:episode/libtv/sessions/:id/collect',
+    async (request) => {
+      const params = EpisodeParams.extend({ id: z.string().uuid() }).parse(
+        request.params,
+      );
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      return libtv.collect(store, params.episode, params.id);
+    },
+  );
+
+  app.post(
+    '/api/series/:series/episodes/:episode/libtv/sessions/:id/promote',
+    async (request) => {
+      const params = EpisodeParams.extend({ id: z.string().uuid() }).parse(
+        request.params,
+      );
+      const store = new ProjectStore(config.projectsRoot, params.series);
+      const result = await libtv.promote(
+        store,
+        params.episode,
+        params.id,
+        request.body,
+      );
+      notifyWorkspace(events, params.series, params.episode);
+      return result;
+    },
+  );
 
   app.put('/api/series/:series/episodes/:episode/script', async (request) => {
     const params = EpisodeParams.parse(request.params);

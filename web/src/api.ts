@@ -1,15 +1,24 @@
 import type {
   CharacterAsset,
+  BenchmarkCandidate,
+  BenchmarkCriterion,
+  BenchmarkReport,
+  EvaluationDimensionId,
+  EvaluationReport,
+  EvaluationScope,
   ImportPreview,
   ImportRequest,
   ImportResult,
   JobType,
+  LibTvSession,
+  LibTvSessionsResponse,
   LocationAsset,
   ScriptDocument,
   SeriesSummary,
   StoryboardDocument,
   StudioJob,
   Workspace,
+  WorkflowView,
 } from './types';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -49,6 +58,162 @@ export const api = {
 
   workspace(seriesId: string, episodeId: string): Promise<Workspace> {
     return request(`${episodePath(seriesId, episodeId)}/workspace`);
+  },
+
+  libTvSessions(
+    seriesId: string,
+    episodeId: string,
+  ): Promise<LibTvSessionsResponse> {
+    return request(`${episodePath(seriesId, episodeId)}/libtv/sessions`);
+  },
+
+  workflow(seriesId: string, episodeId: string): Promise<WorkflowView> {
+    return request(`${episodePath(seriesId, episodeId)}/workflow`);
+  },
+
+  async evaluations(
+    seriesId: string,
+    episodeId: string,
+  ): Promise<EvaluationReport[]> {
+    return (
+      await request<{ evaluations: EvaluationReport[] }>(
+        `${episodePath(seriesId, episodeId)}/evaluations`,
+      )
+    ).evaluations;
+  },
+
+  createEvaluation(
+    seriesId: string,
+    episodeId: string,
+    input: {
+      scope: EvaluationScope;
+      title?: string;
+      manualRatings: Array<{
+        dimension: EvaluationDimensionId;
+        score: number;
+        note: string;
+      }>;
+    },
+  ): Promise<EvaluationReport> {
+    return request(`${episodePath(seriesId, episodeId)}/evaluations`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  async benchmarkCandidates(
+    seriesId: string,
+    episodeId: string,
+  ): Promise<BenchmarkCandidate[]> {
+    return (
+      await request<{ candidates: BenchmarkCandidate[] }>(
+        `${episodePath(seriesId, episodeId)}/benchmarks/candidates`,
+      )
+    ).candidates;
+  },
+
+  async benchmarks(
+    seriesId: string,
+    episodeId: string,
+  ): Promise<BenchmarkReport[]> {
+    return (
+      await request<{ benchmarks: BenchmarkReport[] }>(
+        `${episodePath(seriesId, episodeId)}/benchmarks`,
+      )
+    ).benchmarks;
+  },
+
+  createBenchmark(
+    seriesId: string,
+    episodeId: string,
+    input: {
+      title: string;
+      ratings: Array<{
+        candidateId: string;
+        criteria: Partial<Record<BenchmarkCriterion, number>>;
+        note: string;
+      }>;
+    },
+  ): Promise<BenchmarkReport> {
+    return request(`${episodePath(seriesId, episodeId)}/benchmarks`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  createLibTvSession(
+    seriesId: string,
+    episodeId: string,
+    input: { instruction: string; referenceFiles: string[] },
+  ): Promise<LibTvSession> {
+    return request(`${episodePath(seriesId, episodeId)}/libtv/sessions`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  refreshLibTvSession(
+    seriesId: string,
+    episodeId: string,
+    sessionId: string,
+  ): Promise<LibTvSession> {
+    return request(
+      `${episodePath(seriesId, episodeId)}/libtv/sessions/${encodeURIComponent(sessionId)}/refresh`,
+      { method: 'POST' },
+    );
+  },
+
+  collectLibTvSession(
+    seriesId: string,
+    episodeId: string,
+    sessionId: string,
+  ): Promise<LibTvSession> {
+    return request(
+      `${episodePath(seriesId, episodeId)}/libtv/sessions/${encodeURIComponent(sessionId)}/collect`,
+      { method: 'POST' },
+    );
+  },
+
+  continueLibTvSession(
+    seriesId: string,
+    episodeId: string,
+    sessionId: string,
+    input: { instruction: string; referenceFiles: string[] },
+  ): Promise<LibTvSession> {
+    return request(
+      `${episodePath(seriesId, episodeId)}/libtv/sessions/${encodeURIComponent(sessionId)}/continue`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  promoteLibTvResult(
+    seriesId: string,
+    episodeId: string,
+    sessionId: string,
+    input: {
+      resultIndex: number;
+      cutId: string;
+      role: 'first' | 'last';
+      replaceExisting: boolean;
+    },
+  ): Promise<{
+    ok: true;
+    cutId: string;
+    role: 'first' | 'last';
+    round: number;
+    candidateIndex: number;
+    file: string;
+  }> {
+    return request(
+      `${episodePath(seriesId, episodeId)}/libtv/sessions/${encodeURIComponent(sessionId)}/promote`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
   },
 
   async jobs(seriesId?: string, episodeId?: string): Promise<StudioJob[]> {

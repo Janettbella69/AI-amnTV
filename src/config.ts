@@ -16,6 +16,8 @@ export interface AppConfig {
   comfyWorkflow?: string;
   comfyInputDir?: string;
   frameUrlManifest?: string;
+  libtvAccessKey?: string;
+  libtvApiBase: string;
   studioHost: string;
   studioPort: number;
   studioDatabase: string;
@@ -63,6 +65,7 @@ export function getConfig(cwd = process.cwd()): AppConfig {
     minimaxApiBase: process.env.MINIMAX_API_BASE ?? 'https://api.minimaxi.com',
     minimaxTtsModel: process.env.MINIMAX_TTS_MODEL ?? 'speech-2.8-hd',
     minimaxVideoModel: process.env.MINIMAX_VIDEO_MODEL ?? 'MiniMax-Hailuo-2.3',
+    libtvApiBase: 'https://im.liblib.tv',
     studioHost: process.env.AMNTV_STUDIO_HOST ?? '127.0.0.1',
     studioPort: Number(process.env.AMNTV_STUDIO_PORT ?? 4317),
     studioDatabase: path.resolve(
@@ -88,11 +91,13 @@ export function getConfig(cwd = process.cwd()): AppConfig {
   const comfyWorkflow = optional(process.env.COMFYUI_WORKFLOW);
   const comfyInputDir = optional(process.env.COMFYUI_INPUT_DIR);
   const frameUrlManifest = optional(process.env.AMNTV_FRAME_URL_MANIFEST);
+  const libtvAccessKey = optional(process.env.LIBTV_ACCESS_KEY);
   if (anthropicApiKey) config.anthropicApiKey = anthropicApiKey;
   if (minimaxApiKey) config.minimaxApiKey = minimaxApiKey;
   if (comfyUrl) config.comfyUrl = comfyUrl;
   if (comfyWorkflow) config.comfyWorkflow = path.resolve(cwd, comfyWorkflow);
   if (comfyInputDir) config.comfyInputDir = path.resolve(cwd, comfyInputDir);
   if (frameUrlManifest) config.frameUrlManifest = path.resolve(cwd, frameUrlManifest);
+  if (libtvAccessKey) config.libtvAccessKey = libtvAccessKey;
   return config;
 }

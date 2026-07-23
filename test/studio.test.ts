@@ -20,6 +20,7 @@ function config(root: string): AppConfig {
     minimaxApiBase: 'https://api.minimaxi.com',
     minimaxTtsModel: 'speech-2.8-hd',
     minimaxVideoModel: 'MiniMax-Hailuo-2.3',
+    libtvApiBase: 'https://im.liblib.tv',
     studioHost: '127.0.0.1',
     studioPort: 4317,
     studioDatabase: path.join(root, '.studio', 'studio.db'),
@@ -74,11 +75,183 @@ test('Studio API exposes demo series and aggregated workspace', async (context) 
   assert.equal(value.script.scenes.length, 5);
   assert.equal(value.costs.knownTotalCny, 0);
 
+  const workflow = await app.inject({
+    method: 'GET',
+    url: '/api/series/web-demo/episodes/EP01/workflow',
+  });
+  assert.equal(workflow.statusCode, 200);
+  assert.equal(workflow.json().stages.length, 10);
+  assert.equal(workflow.json().stages[0].id, 'script');
+  assert.equal(workflow.json().stages[0].status, 'active');
+  assert.equal(
+    workflow.json().stages.find((stage: { id: string }) => stage.id === 'cast')
+      .status,
+    'blocked',
+  );
+
   const hiddenDatabase = await app.inject({
     method: 'GET',
     url: '/media/.studio/studio.db',
   });
   assert.notEqual(hiddenDatabase.statusCode, 200);
+});
+
+test('Studio keeps LibTV dry-run sessions and results inside the project', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-amntv-libtv-api-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const app = await buildStudioServer(config(root));
+  context.after(() => app.close());
+  await app.inject({
+    method: 'POST',
+    url: '/api/demo',
+    payload: { seriesId: 'libtv-demo' },
+  });
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/series/libtv-demo/episodes/EP01/libtv/sessions',
+    payload: {
+      instruction: '生成一个保持角色一致的竖屏情绪镜头',
+      referenceFiles: [],
+    },
+  });
+  assert.equal(created.statusCode, 201);
+  const session = created.json();
+  assert.equal(session.status, 'ready');
+  assert.equal(session.projectUrl, undefined);
+  assert.equal(session.results.length, 1);
+  assert.equal(session.turns.length, 1);
+  assert.match(session.results[0].url, /^\/media\//);
+  assert.equal(
+    session.messages.some((message: { content: string }) =>
+      message.content.includes('未向外部服务发送'),
+    ),
+    true,
+  );
+  assert.equal(fs.existsSync(session.results[0].file), true);
+
+  const continued = await app.inject({
+    method: 'POST',
+    url: `/api/series/libtv-demo/episodes/EP01/libtv/sessions/${session.id}/continue`,
+    payload: {
+      instruction: '保持构图，只把女主眼神调整得更坚定',
+      referenceFiles: [],
+    },
+  });
+  assert.equal(continued.statusCode, 200);
+  assert.equal(continued.json().turns.length, 2);
+  assert.equal(continued.json().results.length, 2);
+  assert.equal(continued.json().turns[1].status, 'sent');
+
+  const store = new ProjectStore(root, 'libtv-demo');
+  const cutId = store.storyboard('EP01').cuts[0]!.id;
+  store.transition('EP01', cutId, 'audio_ready');
+  const promoted = await app.inject({
+    method: 'POST',
+    url: `/api/series/libtv-demo/episodes/EP01/libtv/sessions/${session.id}/promote`,
+    payload: {
+      resultIndex: 0,
+      cutId,
+      role: 'first',
+      replaceExisting: false,
+    },
+  });
+  assert.equal(promoted.statusCode, 200);
+  assert.equal(promoted.json().candidateIndex, 1);
+  assert.equal(fs.existsSync(promoted.json().file), true);
+  assert.equal(store.state('EP01').cuts[cutId]!.stage, 'keyframes_ready');
+
+  const candidates = await app.inject({
+    method: 'GET',
+    url: '/api/series/libtv-demo/episodes/EP01/benchmarks/candidates',
+  });
+  assert.equal(candidates.statusCode, 200);
+  assert.equal(candidates.json().candidates.length >= 2, true);
+  const benchmarkCandidates = candidates.json().candidates.slice(0, 2);
+  const benchmark = await app.inject({
+    method: 'POST',
+    url: '/api/series/libtv-demo/episodes/EP01/benchmarks',
+    payload: {
+      title: 'LibTV dry-run 产物对比',
+      ratings: benchmarkCandidates.map(
+        (candidate: { id: string }, index: number) => ({
+          candidateId: candidate.id,
+          criteria: {
+            identity: 80 + index,
+            composition: 78 + index,
+            cameraLanguage: 76 + index,
+            artifacts: 82 + index,
+          },
+          note: `候选 ${index + 1} 的人工证据`,
+        }),
+      ),
+    },
+  });
+  assert.equal(benchmark.statusCode, 201);
+  assert.equal(benchmark.json().items.length, 2);
+  assert.equal(benchmark.json().items[0].rank, 1);
+  assert.equal(benchmark.json().items[0].technical.width, 720);
+  assert.equal(benchmark.json().items[0].technical.height, 1280);
+
+  const listed = await app.inject({
+    method: 'GET',
+    url: '/api/series/libtv-demo/episodes/EP01/libtv/sessions',
+  });
+  assert.equal(listed.statusCode, 200);
+  assert.equal(listed.json().status.mode, 'dry-run');
+  assert.equal(listed.json().sessions[0].id, session.id);
+  assert.equal(listed.json().sessions[0].projectUrl, undefined);
+});
+
+test('Studio persists evidence-based evaluations and marks stale reports', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-amntv-evaluation-api-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const app = await buildStudioServer(config(root));
+  context.after(() => app.close());
+  await app.inject({
+    method: 'POST',
+    url: '/api/demo',
+    payload: { seriesId: 'evaluation-demo' },
+  });
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/series/evaluation-demo/episodes/EP01/evaluations',
+    payload: {
+      scope: 'story',
+      manualRatings: [
+        {
+          dimension: 'narrative',
+          score: 86,
+          note: '开场冲突成立，但第二场还可减少解释性台词。',
+        },
+      ],
+    },
+  });
+  assert.equal(created.statusCode, 201);
+  const report = created.json();
+  assert.equal(report.scope, 'story');
+  assert.equal(report.dimensions.length, 4);
+  assert.equal(report.humanCoverage, 30);
+  assert.equal(report.stale, false);
+  assert.equal(
+    report.dimensions.find(
+      (dimension: { id: string }) => dimension.id === 'narrative',
+    ).source,
+    'hybrid',
+  );
+
+  const store = new ProjectStore(root, 'evaluation-demo');
+  const script = store.script('EP01');
+  script.title = '修改后的标题';
+  store.saveScript(script);
+  const listed = await app.inject({
+    method: 'GET',
+    url: '/api/series/evaluation-demo/episodes/EP01/evaluations',
+  });
+  assert.equal(listed.statusCode, 200);
+  assert.equal(listed.json().evaluations[0].id, report.id);
+  assert.equal(listed.json().evaluations[0].stale, true);
 });
 
 test('Studio API validates script writes through the domain schema', async (context) => {

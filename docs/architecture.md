@@ -17,10 +17,14 @@ flowchart LR
   Source["项目 / 剧本 / 大纲"] --> Import["导入预检"]
   Import --> UI["React Studio"]
   UI -->|REST 写入 / SSE 订阅| API["Fastify 本地 API"]
+  UI -->|显式发送 / 手动回收| LibTV["可选 LibTV 外部画布"]
+  UI --> Workflow["可执行工作流与评测视图"]
   API --> Queue["SQLite 任务队列"]
   Queue --> Worker["单进程 Pipeline Worker"]
   Worker --> Core["TypeScript 状态机与 Provider"]
   API --> Files["YAML / 媒体事实源"]
+  LibTV --> API
+  Workflow --> API
   Core --> Files
 ```
 
@@ -58,6 +62,13 @@ projects/<series>/
 │   ├── source-meta.yaml
 │   ├── storyboard.yaml
 │   ├── state.yaml
+│   ├── external/libtv/
+│   │   └── sessions/
+│   │       ├── <SESSION-ID>.yaml
+│   │       └── <SESSION-ID>/results/
+│   ├── evaluations/
+│   │   ├── <EVALUATION-ID>.yaml
+│   │   └── benchmarks/<BENCHMARK-ID>.yaml
 │   ├── review/
 │   ├── cuts/<CUT-ID>/
 │   │   ├── audio/
@@ -71,6 +82,23 @@ projects/<series>/
 
 生成元数据保存 provider、model、seed、prompt hash、参考图、输出路径和已知成本。候选 take 带
 round，不会因局部重做被覆盖。
+
+LibTV 会话同样属于项目文件事实源。远端会话 ID、增量消息序号、结果来源和本地回收文件均持久化；
+SQLite 队列不接管它，避免 Studio 重启后把一次无法确认的外部提交自动执行第二次。
+
+## 可执行工作流
+
+`GET /api/series/:series/episodes/:episode/workflow` 不保存一份容易过期的“流程状态”，而是从关卡、
+镜头 stage、后台任务、LibTV 会话和评测报告实时投影 10 个阶段。每个阶段给出
+`complete/active/ready/blocked/optional`、进度、阻塞原因和下一动作。LibTV 与评测是可选支路，
+不会绕过或阻塞剧本、定妆、分镜、配音、圈图、视频、合成和成片批准主链。
+
+## 评测证据
+
+评测报告和供应商对比报告都是不可变 YAML。每份内容评测记录当前项目 `inputHash`；剧本、分镜、
+资产、关卡、镜头或交付状态变化后，读取接口会把旧报告标记为 `stale`，而不改写历史文件。自动
+检查只使用结构和媒体事实；审美、表演、镜头意图与声音质感由人工证据输入。详细量表和判定规则见
+[评测系统](evaluation-system.md)。
 
 ## 卡状态
 

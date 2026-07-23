@@ -4,12 +4,15 @@ import { EmptyState, ProgressBar, StatusTag } from './components/Common';
 import { Assets } from './screens/Assets';
 import { Costs } from './screens/Costs';
 import { Delivery } from './screens/Delivery';
+import { EvaluationCenter } from './screens/EvaluationCenter';
 import { Keyframes } from './screens/Keyframes';
 import { ImportCenter } from './screens/ImportCenter';
+import { LibTvCanvas } from './screens/LibTvCanvas';
 import { Overview } from './screens/Overview';
 import { ScriptEditor } from './screens/ScriptEditor';
 import { StoryboardEditor } from './screens/StoryboardEditor';
 import { TaskCenter } from './screens/TaskCenter';
+import { Workflow } from './screens/Workflow';
 import type {
   CharacterAsset,
   Cut,
@@ -27,10 +30,13 @@ import type {
 const tabs: Array<[StudioTab, string, string]> = [
   ['import', '导入', 'IN'],
   ['overview', '总览', 'OV'],
+  ['workflow', '工作流', 'WF'],
   ['script', '剧本', 'SC'],
   ['storyboard', '分镜', 'SB'],
+  ['canvas', '画布', 'CV'],
   ['keyframes', '关键帧', 'KF'],
   ['assets', '资产库', 'AS'],
+  ['evaluation', '评测', 'QA'],
   ['tasks', '任务', 'Q'],
   ['costs', '成本', '¥'],
   ['delivery', '交付', 'DL'],
@@ -501,6 +507,16 @@ export function App() {
     if (tab === 'overview') {
       return <Overview {...common} jobs={jobs} onRun={(type) => void enqueue(type)} />;
     }
+    if (tab === 'workflow') {
+      return (
+        <Workflow
+          {...common}
+          jobs={jobs}
+          onRun={(type) => enqueue(type)}
+          onOpen={setTab}
+        />
+      );
+    }
     if (tab === 'script') {
       return (
         <ScriptEditor
@@ -530,6 +546,7 @@ export function App() {
         />
       );
     }
+    if (tab === 'canvas') return <LibTvCanvas {...common} />;
     if (tab === 'keyframes') {
       return (
         <Keyframes
@@ -555,6 +572,7 @@ export function App() {
         />
       );
     }
+    if (tab === 'evaluation') return <EvaluationCenter {...common} />;
     if (tab === 'tasks') {
       return (
         <TaskCenter
@@ -656,6 +674,12 @@ export function App() {
             <strong>
               {tab === 'import'
                 ? '导入生产资料'
+                : tab === 'workflow'
+                  ? '可恢复制作工作流'
+                : tab === 'canvas'
+                  ? 'LibTV 外部创作台'
+                  : tab === 'evaluation'
+                    ? '多维评测中心'
                 : workspace?.series.title ??
                   selectedSeries?.title ??
                   '制片工作台'}

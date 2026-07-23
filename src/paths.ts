@@ -65,6 +65,47 @@ export class ProjectPaths {
     return path.join(this.episodeRoot(episodeId), 'source-meta.yaml');
   }
 
+  libTvSessionsDir(episodeId: string): string {
+    return path.join(this.episodeRoot(episodeId), 'external', 'libtv', 'sessions');
+  }
+
+  libTvSessionFile(episodeId: string, sessionId: string): string {
+    return path.join(
+      this.libTvSessionsDir(episodeId),
+      `${safe(sessionId, 'libtvSessionId')}.yaml`,
+    );
+  }
+
+  libTvResultsDir(episodeId: string, sessionId: string): string {
+    return path.join(
+      this.libTvSessionsDir(episodeId),
+      safe(sessionId, 'libtvSessionId'),
+      'results',
+    );
+  }
+
+  evaluationsDir(episodeId: string): string {
+    return path.join(this.episodeRoot(episodeId), 'evaluations');
+  }
+
+  evaluationFile(episodeId: string, evaluationId: string): string {
+    return path.join(
+      this.evaluationsDir(episodeId),
+      `${safe(evaluationId, 'evaluationId')}.yaml`,
+    );
+  }
+
+  benchmarksDir(episodeId: string): string {
+    return path.join(this.evaluationsDir(episodeId), 'benchmarks');
+  }
+
+  benchmarkFile(episodeId: string, benchmarkId: string): string {
+    return path.join(
+      this.benchmarksDir(episodeId),
+      `${safe(benchmarkId, 'benchmarkId')}.yaml`,
+    );
+  }
+
   reviewDir(episodeId: string): string {
     return path.join(this.episodeRoot(episodeId), 'review');
   }

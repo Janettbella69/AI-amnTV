@@ -5,7 +5,10 @@
 
 ## 已实现
 
-- React Web Studio：项目导入、总览、结构化剧本/分镜编辑、资产库、圈图、任务、成本和交付
+- React Web Studio：项目导入、总览、可执行工作流、结构化剧本/分镜编辑、资产库、圈图、任务、成本和交付
+- 可选 LibTV 外部创作台：显式选择素材、持久会话、同会话续写、手动查询/回收和结果晋升；不中断本地审核链
+- 三检查点多维评测：自动结构证据与人工看片/试听分开，报告可追溯、可判定过期
+- LibTV 与本地管线产物同量表对比：保留来源、模型、已知成本、技术参数、人工证据和排名
 - Fastify 本地 API、SQLite 持久任务队列与 SSE 实时进度；重启不重复提交付费任务
 - 60–120 秒、1080×1920、15–25 卡的硬校验
 - 四个人工关卡：剧本 → 定妆 → 分镜与关键帧 → 成片
@@ -40,10 +43,12 @@ AMNTV_DRY_RUN=1 npm run studio:dev
 工作台包含：
 
 - 独立导入中心：完整 AI-amnTV 项目目录、YAML/JSON 结构化剧本、TXT/Markdown 小说或大纲
-- 制作总览与人工关卡状态
+- 10 阶段制作工作流：真实读取关卡、镜头、任务、外部会话和评测状态，显示阻塞原因与下一动作
 - 剧本、分镜结构化编辑与 Claude Agent SDK 任务入口
 - 角色、场景、音色和候选资产管理
 - 关键帧候选圈选、逐卡视频进度和局部重做
+- LibTV 外部画布会话：最多 8 个显式参考素材、费用前提示、同会话追问、手动刷新/回收、结果晋升到指定镜头
+- 剧本/分镜、样片/作监、成片/交付三类评测，以及图片/视频候选的同量表对比
 - 已知/未知成本账本、最终视频预览与交付下载
 - graphite、paper、projector 三套视觉环境和两档信息密度
 
@@ -132,6 +137,25 @@ npm run dev -- approve final my-series EP01
 
 审核页会为每一组生成单选卡片，并拼好可复制的批准命令。必须通过 CLI 落盘，关卡才算真正放行。
 
+### LibTV 外部创作台
+
+如需把 LibTV 作为可选创作画布，在 `.env` 中配置：
+
+```dotenv
+AMNTV_DRY_RUN=0
+LIBTV_ACCESS_KEY=...
+```
+
+Studio 的“画布”页不会把整个项目交给外部 Agent。只有用户本次明确选择的最多 8 个角色、场景或
+关键帧素材会上传；首次创建和同会话续写都需要点击确认。会话在远端调用前先写入
+`episodes/<EP-ID>/external/libtv/`，查询和结果回收也必须手动触发。若进程在远端 ID 落盘前中断，
+记录会进入 `orphaned`，不会自动重提。回收图片可以显式加入某个镜头的首帧/尾帧候选；如该镜头
+已有下游结果，必须另行勾选撤销，旧 round 和元数据仍保留。
+
+`AMNTV_DRY_RUN=1` 时同一界面只生成本地验收图，不读取密钥、不访问 LibTV、也不产生云端费用。
+当前仓库没有在无账号密钥的环境里声称完成实时接口验收；上线前应使用隔离测试项目做一次小额
+端到端验证。能力边界与后续路线见 [LibTV 对标说明](docs/libtv-benchmark.md)。
+
 ### 单卡局部重做
 
 不满意某一张图或某一段动作时，不必重跑整集：
@@ -169,13 +193,15 @@ flowchart LR
 breakdown 和视觉判断。文件系统是唯一事实源，SQLite 只承担 Studio 任务调度，方便人工检查、
 版本控制与故障恢复。
 
-详细说明见 [架构文档](docs/architecture.md)、[视听表演质量规范](docs/production-quality.md)、
-[供应商接入](docs/provider-guide.md)和[竞品参考边界](docs/competitive-notes.md)。
+详细说明见 [架构文档](docs/architecture.md)、[评测系统](docs/evaluation-system.md)、
+[视听表演质量规范](docs/production-quality.md)、[供应商接入](docs/provider-guide.md)和
+[竞品参考边界](docs/competitive-notes.md)。
 
 ## 重要边界
 
 - 请只改编自有版权或公版内容。
 - 云供应商调用可能产生费用；dry-run 不调用云服务。
+- LibTV 实时模式只允许官方 API 主机与结果主机；不要把访问密钥提交到仓库。
 - MiniMax 视频需要可公开读取的 HTTPS 参考帧 URL 映射。
 - `jianying-draft/draft_content.json` 是实验性结构；`timeline.json` 才是稳定、无损的重建依据。
 - 本仓库不包含任何 API 密钥、模型文件或生成项目。

@@ -282,13 +282,203 @@ export interface StudioJob {
   updatedAt: string;
 }
 
+export interface LibTvStatus {
+  ready: boolean;
+  mode: 'dry-run' | 'live';
+  message: string;
+}
+
+export interface LibTvSession {
+  id: string;
+  seriesId: string;
+  episodeId: string;
+  status: 'submitting' | 'running' | 'ready' | 'failed' | 'orphaned';
+  instruction: string;
+  references: Array<{
+    sourceFile: string;
+    name: string;
+    bytes: number;
+    mimeType: string;
+    remoteUrl?: string;
+  }>;
+  turns: Array<{
+    id: string;
+    status: 'submitting' | 'sent' | 'failed' | 'orphaned';
+    instruction: string;
+    references: Array<{
+      sourceFile: string;
+      name: string;
+      bytes: number;
+      mimeType: string;
+      remoteUrl?: string;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+    error?: string;
+  }>;
+  messages: Array<{
+    id: string;
+    seq?: number;
+    role: string;
+    content: string;
+  }>;
+  resultSources: string[];
+  results: Array<{
+    sourceUrl?: string;
+    file: string;
+    mimeType: string;
+    bytes: number;
+    url?: string;
+  }>;
+  projectUuid?: string;
+  remoteSessionId?: string;
+  maxSeq: number;
+  createdAt: string;
+  updatedAt: string;
+  error?: string;
+  projectUrl?: string;
+}
+
+export interface LibTvSessionsResponse {
+  status: LibTvStatus;
+  sessions: LibTvSession[];
+}
+
+export interface WorkflowStage {
+  id: string;
+  code: string;
+  label: string;
+  detail: string;
+  status: 'complete' | 'active' | 'ready' | 'blocked' | 'optional';
+  progress: number;
+  blockers: string[];
+  optional: boolean;
+  action: {
+    kind: 'open' | 'job';
+    label: string;
+    tab: StudioTab;
+    jobType?: JobType;
+  };
+}
+
+export interface WorkflowView {
+  seriesId: string;
+  episodeId: string;
+  overallProgress: number;
+  completedRequired: number;
+  totalRequired: number;
+  nextStageId?: string;
+  stages: WorkflowStage[];
+}
+
+export type EvaluationScope = 'story' | 'dailies' | 'final';
+export type EvaluationDimensionId =
+  | 'narrative'
+  | 'character'
+  | 'storyboard'
+  | 'visual'
+  | 'audio'
+  | 'continuity'
+  | 'platform'
+  | 'delivery';
+
+export interface EvaluationCheck {
+  id: string;
+  label: string;
+  status: 'pass' | 'warn' | 'fail';
+  score: number;
+  maxScore: number;
+  evidence: string;
+  evidenceKind: 'direct' | 'proxy' | 'missing';
+}
+
+export interface EvaluationDimension {
+  id: EvaluationDimensionId;
+  label: string;
+  weight: number;
+  score: number;
+  automaticScore: number;
+  manualScore?: number;
+  manualNote?: string;
+  source: 'automatic' | 'hybrid';
+  confidence: number;
+  summary: string;
+  checks: EvaluationCheck[];
+}
+
+export interface EvaluationReport {
+  id: string;
+  version: 1;
+  seriesId: string;
+  episodeId: string;
+  scope: EvaluationScope;
+  title: string;
+  inputHash: string;
+  overallScore: number;
+  evidenceCoverage: number;
+  humanCoverage: number;
+  verdict: 'pass' | 'revise' | 'needs_human_review';
+  dimensions: EvaluationDimension[];
+  createdAt: string;
+  stale: boolean;
+}
+
+export type BenchmarkCriterion =
+  | 'identity'
+  | 'composition'
+  | 'cameraLanguage'
+  | 'motion'
+  | 'artifacts'
+  | 'voicePerformance';
+
+export interface BenchmarkCandidate {
+  id: string;
+  source: 'libtv' | 'pipeline';
+  kind: 'image' | 'video';
+  label: string;
+  file: string;
+  url?: string;
+  provider: string;
+  model?: string;
+  costCny?: number;
+  costKnown: boolean;
+}
+
+export interface BenchmarkReport {
+  id: string;
+  version: 1;
+  seriesId: string;
+  episodeId: string;
+  title: string;
+  rubric: 'amnTV-perceptual-v1';
+  items: Array<{
+    candidate: BenchmarkCandidate;
+    criteria: Partial<Record<BenchmarkCriterion, number>>;
+    score: number;
+    rank: number;
+    note: string;
+    technical: {
+      bytes: number;
+      width: number;
+      height: number;
+      durationSec?: number;
+      fps?: number;
+      hasAudio?: boolean;
+    };
+  }>;
+  createdAt: string;
+}
+
 export type StudioTab =
   | 'import'
   | 'overview'
+  | 'workflow'
   | 'script'
   | 'storyboard'
+  | 'canvas'
   | 'keyframes'
   | 'assets'
+  | 'evaluation'
   | 'tasks'
   | 'costs'
   | 'delivery';
