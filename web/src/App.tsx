@@ -5,6 +5,7 @@ import { Assets } from './screens/Assets';
 import { Costs } from './screens/Costs';
 import { Delivery } from './screens/Delivery';
 import { EvaluationCenter } from './screens/EvaluationCenter';
+import { Home } from './screens/Home';
 import { Keyframes } from './screens/Keyframes';
 import { ImportCenter } from './screens/ImportCenter';
 import { LibTvCanvas } from './screens/LibTvCanvas';
@@ -29,11 +30,11 @@ import type {
 
 const tabs: Array<[StudioTab, string, string]> = [
   ['import', '导入', 'IN'],
-  ['overview', '总览', 'OV'],
-  ['workflow', '工作流', 'WF'],
+  ['workflow', '创作画布', 'WF'],
+  ['overview', '项目总览', 'OV'],
   ['script', '剧本', 'SC'],
   ['storyboard', '分镜', 'SB'],
-  ['canvas', '画布', 'CV'],
+  ['canvas', '外部引擎', 'EX'],
   ['keyframes', '关键帧', 'KF'],
   ['assets', '资产库', 'AS'],
   ['evaluation', '评测', 'QA'],
@@ -56,6 +57,7 @@ function initialTab(): StudioTab {
 
 type Theme = 'graphite' | 'paper' | 'projector';
 type Density = 'compact' | 'comfortable';
+type Surface = 'home' | 'studio';
 
 function NewSeriesDialog({
   open,
@@ -279,6 +281,11 @@ function NewEpisode({
 }
 
 export function App() {
+  const [surface, setSurface] = useState<Surface>(() =>
+    new URLSearchParams(window.location.search).get('view') === 'studio'
+      ? 'studio'
+      : 'home',
+  );
   const [series, setSeries] = useState<SeriesSummary[]>([]);
   const [seriesId, setSeriesId] = useState(
     () => localStorage.getItem('amntv-series') ?? '',
@@ -380,9 +387,15 @@ export function App() {
   useEffect(() => {
     localStorage.setItem('amntv-tab', tab);
     const url = new URL(window.location.href);
-    url.searchParams.set('tab', tab);
+    if (surface === 'studio') {
+      url.searchParams.set('view', 'studio');
+      url.searchParams.set('tab', tab);
+    } else {
+      url.searchParams.delete('view');
+      url.searchParams.delete('tab');
+    }
     window.history.replaceState({}, '', url);
-  }, [tab]);
+  }, [surface, tab]);
   useEffect(() => {
     localStorage.setItem('amntv-theme', theme);
   }, [theme]);
@@ -590,16 +603,49 @@ export function App() {
   const activeJob = jobs.find((job) =>
     ['queued', 'running'].includes(job.status),
   );
+  const enterStudio = (nextTab: StudioTab) => {
+    setTab(nextTab);
+    setSurface('studio');
+  };
+
+  if (surface === 'home') {
+    return (
+      <div className="home-surface">
+        <Home
+          series={series}
+          workspace={workspace}
+          onEnter={enterStudio}
+          onCreate={() => setNewSeriesOpen(true)}
+        />
+        <NewSeriesDialog
+          open={newSeriesOpen}
+          onClose={() => setNewSeriesOpen(false)}
+          onCreated={(id) => {
+            setNewSeriesOpen(false);
+            setSeriesId(id);
+            setSurface('studio');
+            setTab('workflow');
+            void loadSeries();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="studio" data-theme={theme} data-density={density}>
       <aside className="sidebar">
-        <div className="brand">
+        <button
+          className="brand"
+          title="返回官网首页"
+          onClick={() => setSurface('home')}
+        >
           <span className="brand-mark">AM</span>
           <div>
             <strong>AI-amnTV</strong>
             <small>PRODUCTION OS</small>
           </div>
-        </div>
+        </button>
         <div className="series-switcher">
           <label htmlFor="series-select">系列</label>
           <select
@@ -675,9 +721,9 @@ export function App() {
               {tab === 'import'
                 ? '导入生产资料'
                 : tab === 'workflow'
-                  ? '可恢复制作工作流'
+                  ? 'AI 漫剧创作画布'
                 : tab === 'canvas'
-                  ? 'LibTV 外部创作台'
+                  ? '外部生成引擎'
                   : tab === 'evaluation'
                     ? '多维评测中心'
                 : workspace?.series.title ??
@@ -729,7 +775,9 @@ export function App() {
           </div>
         )}
         {notice && <div className="toast">{notice}</div>}
-        <main className="screen">{content()}</main>
+        <main className={tab === 'workflow' ? 'screen screen-canvas' : 'screen'}>
+          {content()}
+        </main>
       </div>
 
       <NewSeriesDialog
