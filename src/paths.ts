@@ -57,6 +57,14 @@ export class ProjectPaths {
     return path.join(this.episodeRoot(episodeId), 'state.yaml');
   }
 
+  sourceFile(episodeId: string): string {
+    return path.join(this.episodeRoot(episodeId), 'source.md');
+  }
+
+  sourceMetaFile(episodeId: string): string {
+    return path.join(this.episodeRoot(episodeId), 'source-meta.yaml');
+  }
+
   reviewDir(episodeId: string): string {
     return path.join(this.episodeRoot(episodeId), 'review');
   }

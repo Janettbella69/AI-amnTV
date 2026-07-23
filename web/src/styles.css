@@ -1378,6 +1378,342 @@ input.invalid {
   line-height: 1.6;
 }
 
+.import-center {
+  --import-rule: color-mix(in oklch, var(--line) 76%, var(--accent));
+}
+
+.import-modes {
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.import-modes button {
+  min-height: 92px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  padding: 14px 16px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-content: center;
+  gap: 4px 10px;
+  text-align: left;
+}
+
+.import-modes button:last-child {
+  border-right: 0;
+}
+
+.import-modes button:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.import-modes button.active {
+  background: var(--panel);
+  box-shadow: inset 0 -2px var(--accent);
+  color: var(--text);
+}
+
+.import-modes button > span {
+  grid-row: 1 / span 2;
+  color: var(--accent);
+  font: 700 11px/1.2 "SFMono-Regular", monospace;
+}
+
+.import-modes button strong {
+  font-size: 13px;
+}
+
+.import-modes button small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.import-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+  gap: var(--pad);
+  align-items: start;
+}
+
+.import-form-panel,
+.import-preview-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.import-preview-panel {
+  position: sticky;
+  top: calc(78px + var(--pad));
+}
+
+.ledger-header {
+  min-height: 66px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ledger-header h3 {
+  margin: 6px 0 0;
+  font-size: 16px;
+}
+
+.ledger-header > small {
+  color: var(--muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+.metadata-header {
+  border-top: 1px solid var(--import-rule);
+}
+
+.import-fields,
+.import-metadata {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field-help {
+  grid-column: 1 / -1;
+  margin: -4px 0 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.file-drop {
+  grid-column: 1 / -1;
+  min-height: 148px;
+  border: 1px dashed var(--line-strong);
+  padding: 22px;
+  background:
+    linear-gradient(var(--panel-2), var(--panel-2)) padding-box,
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 13px,
+      color-mix(in oklch, var(--accent) 20%, transparent) 13px 14px
+    );
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  gap: 7px;
+}
+
+.file-drop:hover,
+.file-drop.has-file {
+  border-color: var(--accent);
+}
+
+.file-drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.file-drop > span {
+  color: var(--accent);
+  font: 700 9px/1.2 "SFMono-Regular", monospace;
+  letter-spacing: 0.12em;
+}
+
+.file-drop > strong {
+  font-size: 16px;
+}
+
+.file-drop > small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.source-paste {
+  min-height: 190px;
+}
+
+.import-error {
+  margin: 0;
+  padding: 11px 16px;
+  border-top: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 11px;
+}
+
+.import-actions {
+  min-height: 66px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.import-actions > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.import-awaiting {
+  min-height: 330px;
+  padding: 46px 30px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.import-awaiting > span {
+  color: var(--accent);
+  font: 700 9px/1.2 "SFMono-Regular", monospace;
+  letter-spacing: 0.14em;
+}
+
+.import-awaiting strong {
+  margin-top: 10px;
+  font-size: 21px;
+}
+
+.import-awaiting p {
+  max-width: 340px;
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.import-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.import-summary > div {
+  min-height: 92px;
+  padding: 14px 16px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  align-content: space-between;
+  gap: 4px;
+}
+
+.import-summary > div:nth-child(2n) {
+  border-right: 0;
+}
+
+.import-summary > div:first-child {
+  grid-column: 1 / -1;
+  border-right: 0;
+}
+
+.import-summary span,
+.import-summary small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.import-summary strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 18px;
+}
+
+.import-findings {
+  border-bottom: 1px solid var(--line);
+}
+
+.import-findings p {
+  min-height: 42px;
+  margin: 0;
+  padding: 9px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.import-findings p:first-child {
+  border-top: 0;
+}
+
+.import-findings p > span {
+  color: var(--warning);
+  font: 700 9px/1 "SFMono-Regular", monospace;
+}
+
+.import-findings p.blocking {
+  color: var(--danger);
+}
+
+.import-findings p.blocking > span {
+  color: var(--danger);
+}
+
+.import-contract {
+  margin: 0;
+  padding: 10px 16px;
+}
+
+.import-contract > div {
+  min-height: 38px;
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+}
+
+.import-contract > div:last-child {
+  border-bottom: 0;
+}
+
+.import-contract dt {
+  color: var(--muted);
+}
+
+.import-contract dd {
+  margin: 0;
+}
+
+.import-commit {
+  min-height: 78px;
+  padding: 13px 16px;
+  border-top: 1px solid var(--line-strong);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.import-commit p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .empty-state {
   min-height: 54vh;
   border: 1px dashed var(--line-strong);
@@ -1586,13 +1922,23 @@ input.invalid {
     font-size: 18px;
   }
 
+  .sidebar-footer .import-link::after {
+    content: "IN";
+    font: 700 10px/1 "SFMono-Regular", monospace;
+  }
+
   .cut-form {
     grid-template-columns: repeat(3, 1fr);
   }
 
   .overview-grid,
-  .delivery-grid {
+  .delivery-grid,
+  .import-workbench {
     grid-template-columns: 1fr;
+  }
+
+  .import-preview-panel {
+    position: static;
   }
 }
 
@@ -1683,8 +2029,39 @@ input.invalid {
   .cost-banner,
   .script-meta,
   .agent-box,
-  .new-episode-form {
+  .new-episode-form,
+  .import-metadata {
     grid-template-columns: 1fr;
+  }
+
+  .import-modes {
+    grid-template-columns: 1fr;
+  }
+
+  .import-modes button {
+    min-height: 72px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .import-modes button:last-child {
+    border-bottom: 0;
+  }
+
+  .import-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .import-actions,
+  .import-commit {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .import-actions .button,
+  .import-commit .button {
+    min-height: 44px;
+    width: 100%;
   }
 
   .provider-ledger > div,

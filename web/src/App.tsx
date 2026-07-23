@@ -5,6 +5,7 @@ import { Assets } from './screens/Assets';
 import { Costs } from './screens/Costs';
 import { Delivery } from './screens/Delivery';
 import { Keyframes } from './screens/Keyframes';
+import { ImportCenter } from './screens/ImportCenter';
 import { Overview } from './screens/Overview';
 import { ScriptEditor } from './screens/ScriptEditor';
 import { StoryboardEditor } from './screens/StoryboardEditor';
@@ -12,6 +13,7 @@ import { TaskCenter } from './screens/TaskCenter';
 import type {
   CharacterAsset,
   Cut,
+  ImportResult,
   JobType,
   LocationAsset,
   ScriptDocument,
@@ -23,6 +25,7 @@ import type {
 } from './types';
 
 const tabs: Array<[StudioTab, string, string]> = [
+  ['import', '导入', 'IN'],
   ['overview', '总览', 'OV'],
   ['script', '剧本', 'SC'],
   ['storyboard', '分镜', 'SB'],
@@ -32,6 +35,18 @@ const tabs: Array<[StudioTab, string, string]> = [
   ['costs', '成本', '¥'],
   ['delivery', '交付', 'DL'],
 ];
+const studioTabs = new Set(tabs.map(([id]) => id));
+
+function initialTab(): StudioTab {
+  const requested = new URLSearchParams(window.location.search).get('tab');
+  if (requested && studioTabs.has(requested as StudioTab)) {
+    return requested as StudioTab;
+  }
+  const stored = localStorage.getItem('amntv-tab');
+  return stored && studioTabs.has(stored as StudioTab)
+    ? (stored as StudioTab)
+    : 'import';
+}
 
 type Theme = 'graphite' | 'paper' | 'projector';
 type Density = 'compact' | 'comfortable';
@@ -205,8 +220,15 @@ function NewEpisode({
   jobs: StudioJob[];
   onEnqueue: (episodeId: string, outline: string) => Promise<void>;
 }) {
-  const [episodeId, setEpisodeId] = useState('EP01');
-  const [outline, setOutline] = useState('');
+  const sourceDraft = series.sourceDrafts[0];
+  const [episodeId, setEpisodeId] = useState(
+    sourceDraft?.episodeId ?? 'EP01',
+  );
+  const [outline, setOutline] = useState(sourceDraft?.content ?? '');
+  useEffect(() => {
+    setEpisodeId(sourceDraft?.episodeId ?? 'EP01');
+    setOutline(sourceDraft?.content ?? '');
+  }, [series.id, sourceDraft?.content, sourceDraft?.episodeId]);
   const active = jobs.find((job) =>
     ['queued', 'running'].includes(job.status),
   );
@@ -260,9 +282,7 @@ export function App() {
   );
   const [workspace, setWorkspace] = useState<Workspace>();
   const [jobs, setJobs] = useState<StudioJob[]>([]);
-  const [tab, setTab] = useState<StudioTab>(
-    () => (localStorage.getItem('amntv-tab') as StudioTab | null) ?? 'overview',
-  );
+  const [tab, setTab] = useState<StudioTab>(initialTab);
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem('amntv-theme') as Theme | null) ?? 'graphite',
   );
@@ -327,12 +347,14 @@ export function App() {
   }, [selectedSeries]);
 
   useEffect(() => {
+    if (loading) return;
+    if (seriesId && !series.some((item) => item.id === seriesId)) return;
     localStorage.setItem('amntv-series', seriesId);
     localStorage.setItem('amntv-episode', episodeId);
     void Promise.all([loadWorkspace(), loadJobs()]).catch((caught) =>
       setError(caught instanceof Error ? caught.message : String(caught)),
     );
-  }, [seriesId, episodeId, loadJobs, loadWorkspace]);
+  }, [series, seriesId, episodeId, loadJobs, loadWorkspace, loading]);
 
   useEffect(() => {
     const events = new EventSource('/api/events');
@@ -351,6 +373,9 @@ export function App() {
 
   useEffect(() => {
     localStorage.setItem('amntv-tab', tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tab);
+    window.history.replaceState({}, '', url);
   }, [tab]);
   useEffect(() => {
     localStorage.setItem('amntv-theme', theme);
@@ -397,21 +422,47 @@ export function App() {
   };
 
   const content = () => {
+    if (tab === 'import') {
+      return (
+        <ImportCenter
+          onComplete={async (result: ImportResult) => {
+            const values = await api.series();
+            setSeries(values);
+            setSeriesId(result.seriesId);
+            setEpisodeId(result.episodeId ?? '');
+            setTab('overview');
+            setNotice(
+              result.alreadyAvailable
+                ? '项目已在当前资料库中'
+                : result.kind === 'outline'
+                  ? '原始资料已导入，可创建剧本任务'
+                  : '生产资料已导入',
+            );
+          }}
+        />
+      );
+    }
     if (!selectedSeries) {
       return (
         <EmptyState
-          title="建立第一条漫剧生产线"
-          detail="创建系列后，资产、分集、任务、成本和交付物都保存在本地项目目录。"
+          title="导入资料或建立新生产线"
+          detail="已有小说、剧本或 AI-amnTV 项目可以直接导入；也可以从空白系列开始。"
           actions={
             <>
               <button
                 className="button primary"
+                onClick={() => setTab('import')}
+              >
+                导入生产资料
+              </button>
+              <button
+                className="button ghost"
                 onClick={() => setNewSeriesOpen(true)}
               >
                 创建系列
               </button>
               <button
-                className="button ghost"
+                className="text-button"
                 onClick={() =>
                   void act('验收样例已创建', async () => {
                     const created = await api.createDemo();
@@ -566,7 +617,9 @@ export function App() {
               key={id}
               className={tab === id ? 'active' : ''}
               onClick={() => setTab(id)}
-              disabled={!workspace && !['overview', 'tasks'].includes(id)}
+              disabled={
+                !workspace && !['import', 'overview', 'tasks'].includes(id)
+              }
             >
               <span>{code}</span>
               {label}
@@ -578,7 +631,16 @@ export function App() {
           ))}
         </nav>
         <div className="sidebar-footer">
-          <button className="text-button" onClick={() => setNewSeriesOpen(true)}>
+          <button
+            className="text-button import-link"
+            onClick={() => setTab('import')}
+          >
+            导入资料
+          </button>
+          <button
+            className="text-button new-link"
+            onClick={() => setNewSeriesOpen(true)}
+          >
             新建系列
           </button>
           <span>本地文件为事实源</span>
@@ -592,7 +654,11 @@ export function App() {
               {workspace?.series.genre ?? selectedSeries?.genre ?? 'AI 漫剧'}
             </span>
             <strong>
-              {workspace?.series.title ?? selectedSeries?.title ?? '制片工作台'}
+              {tab === 'import'
+                ? '导入生产资料'
+                : workspace?.series.title ??
+                  selectedSeries?.title ??
+                  '制片工作台'}
             </strong>
             {workspace && (
               <StatusTag

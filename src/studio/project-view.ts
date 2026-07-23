@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import YAML from 'yaml';
 import type { AppConfig } from '../config.js';
 import type { Cut, Storyboard } from '../domain.js';
 import { createProviders } from '../providers/index.js';
@@ -51,7 +52,32 @@ export function listSeries(config: AppConfig) {
       const episodeIds = directories(path.join(store.paths.root, 'episodes')).filter(
         (episodeId) => fs.existsSync(store.paths.scriptFile(episodeId)),
       );
-      return [{ ...series, episodeIds }];
+      const sourceDrafts = directories(
+        path.join(store.paths.root, 'episodes'),
+      ).flatMap((episodeId) => {
+        const sourceFile = store.paths.sourceFile(episodeId);
+        if (
+          fs.existsSync(store.paths.scriptFile(episodeId)) ||
+          !fs.existsSync(sourceFile)
+        ) {
+          return [];
+        }
+        const content = fs.readFileSync(sourceFile, 'utf8');
+        let filename = path.basename(sourceFile);
+        const metaFile = store.paths.sourceMetaFile(episodeId);
+        if (fs.existsSync(metaFile)) {
+          try {
+            const meta = YAML.parse(fs.readFileSync(metaFile, 'utf8')) as {
+              filename?: string;
+            };
+            filename = meta.filename || filename;
+          } catch {
+            // The source itself is still usable when optional metadata is damaged.
+          }
+        }
+        return [{ episodeId, filename, content }];
+      });
+      return [{ ...series, episodeIds, sourceDrafts }];
     } catch {
       return [];
     }

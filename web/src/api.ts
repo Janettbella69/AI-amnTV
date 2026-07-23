@@ -1,5 +1,8 @@
 import type {
   CharacterAsset,
+  ImportPreview,
+  ImportRequest,
+  ImportResult,
   JobType,
   LocationAsset,
   ScriptDocument,
@@ -26,6 +29,20 @@ const episodePath = (seriesId: string, episodeId: string) =>
   `/api/series/${encodeURIComponent(seriesId)}/episodes/${encodeURIComponent(episodeId)}`;
 
 export const api = {
+  previewImport(input: ImportRequest): Promise<ImportPreview> {
+    return request('/api/imports/preview', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  commitImport(input: ImportRequest): Promise<ImportResult> {
+    return request('/api/imports', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
   async series(): Promise<SeriesSummary[]> {
     return (await request<{ series: SeriesSummary[] }>('/api/series')).series;
   },

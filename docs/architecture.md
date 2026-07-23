@@ -14,7 +14,9 @@
 
 ```mermaid
 flowchart LR
-  UI["React Studio"] -->|REST 写入 / SSE 订阅| API["Fastify 本地 API"]
+  Source["项目 / 剧本 / 大纲"] --> Import["导入预检"]
+  Import --> UI["React Studio"]
+  UI -->|REST 写入 / SSE 订阅| API["Fastify 本地 API"]
   API --> Queue["SQLite 任务队列"]
   Queue --> Worker["单进程 Pipeline Worker"]
   Worker --> Core["TypeScript 状态机与 Provider"]
@@ -26,6 +28,18 @@ flowchart LR
 - API 默认只绑定 `127.0.0.1:4317`，并从 `/media/` 提供项目媒体预览。
 - 队列串行 claim 任务，同一分集/阶段的排队或运行任务会去重。
 - SSE 只传递任务和工作区失效通知；刷新后可从 SQLite 与项目文件完整恢复。
+
+## 导入边界
+
+导入采用“预检 → 提交”两阶段协议：
+
+- `POST /api/imports/preview` 只解析与统计，不写入文件。
+- `POST /api/imports` 会再次执行同一套预检，避免预检与提交之间发生同名冲突。
+- 任何导入都只允许创建新系列；同名目标会阻塞，不做合并或覆盖。
+- 完整项目先写入 `projects/.import-*/<series>`，全部完成后再原子更名到正式目录。
+- 完整项目不跟随符号链接，不复制任何隐藏文件或目录；最多 100,000 个文件、50GB。
+- YAML/JSON 与 TXT/Markdown 请求体最多 1.5MB；Studio 本身仍只监听本机回环地址。
+- 小说或大纲仅落盘为来源草稿，不会在导入时自动排队或触发任何付费 Agent/Provider。
 
 ## 目录
 
@@ -40,6 +54,8 @@ projects/<series>/
 │   └── locations/<LOC-ID>/
 ├── episodes/<EP-ID>/
 │   ├── script.yaml
+│   ├── source.md
+│   ├── source-meta.yaml
 │   ├── storyboard.yaml
 │   ├── state.yaml
 │   ├── review/

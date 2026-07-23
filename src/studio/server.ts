@@ -25,6 +25,7 @@ import {
 import { ProjectStore } from '../store.js';
 import { jobTypes, StudioDatabase } from './db.js';
 import { StudioEvents } from './events.js';
+import { commitImport, previewImport } from './imports.js';
 import { listSeries, workspaceView } from './project-view.js';
 import { PipelineWorker } from './worker.js';
 
@@ -87,6 +88,16 @@ export async function buildStudioServer(
   }));
 
   app.get('/api/series', async () => ({ series: listSeries(config) }));
+
+  app.post('/api/imports/preview', async (request) =>
+    previewImport(config, request.body),
+  );
+
+  app.post('/api/imports', async (request, reply) => {
+    const result = commitImport(config, request.body);
+    events.broadcast('series', { id: result.seriesId });
+    return reply.status(201).send(result);
+  });
 
   app.post('/api/series', async (request, reply) => {
     const body = CreateSeriesBody.parse(request.body);

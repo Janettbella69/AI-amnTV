@@ -14,6 +14,63 @@ export interface SeriesSummary {
   genre: string;
   logline: string;
   episodeIds: string[];
+  sourceDrafts: Array<{
+    episodeId: string;
+    filename: string;
+    content: string;
+  }>;
+}
+
+export type ImportKind = 'project' | 'script' | 'outline';
+
+export interface ImportMetadata {
+  seriesId: string;
+  title: string;
+  genre: string;
+  logline: string;
+  episodeId: string;
+}
+
+export type ImportRequest =
+  | {
+      kind: 'project';
+      sourcePath: string;
+      targetSeriesId: string;
+    }
+  | {
+      kind: 'script' | 'outline';
+      filename: string;
+      content: string;
+      metadata: ImportMetadata;
+    };
+
+export interface ImportPreview {
+  kind: ImportKind;
+  ready: boolean;
+  errors: string[];
+  warnings: string[];
+  conflict: boolean;
+  normalized: ImportMetadata;
+  summary: {
+    source: string;
+    episodes: number;
+    scenes: number;
+    cuts: number;
+    characters: number;
+    locations: number;
+    bytes: number;
+    files?: number;
+    requiresAgent?: boolean;
+    alreadyAvailable?: boolean;
+  };
+}
+
+export interface ImportResult {
+  ok: true;
+  kind: ImportKind;
+  seriesId: string;
+  episodeId?: string;
+  alreadyAvailable?: boolean;
 }
 
 export interface Dialogue {
@@ -153,7 +210,7 @@ export interface CostEntry {
 }
 
 export interface Workspace {
-  series: SeriesSummary & {
+  series: Omit<SeriesSummary, 'episodeIds' | 'sourceDrafts'> & {
     spec: {
       width: 1080;
       height: 1920;
@@ -226,6 +283,7 @@ export interface StudioJob {
 }
 
 export type StudioTab =
+  | 'import'
   | 'overview'
   | 'script'
   | 'storyboard'

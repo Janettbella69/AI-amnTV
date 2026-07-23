@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import YAML from 'yaml';
 import type { AppConfig } from '../src/config.js';
+import { seedDemo } from '../src/demo.js';
+import { ProjectStore } from '../src/store.js';
 import { StudioDatabase } from '../src/studio/db.js';
 import { buildStudioServer } from '../src/studio/server.js';
 
@@ -95,4 +98,158 @@ test('Studio API validates script writes through the domain schema', async (cont
     payload: { episodeId: 'EP01', title: '' },
   });
   assert.equal(response.statusCode, 400);
+});
+
+test('Studio imports a structured script after preflight', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-amntv-import-api-'));
+  const sourceRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'ai-amntv-import-source-'),
+  );
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  context.after(() => fs.rmSync(sourceRoot, { recursive: true, force: true }));
+  const source = new ProjectStore(sourceRoot, 'source-series');
+  seedDemo(source);
+  const content = YAML.stringify({
+    series: source.series(),
+    script: source.script('EP01'),
+    storyboard: source.storyboard('EP01'),
+  });
+  const app = await buildStudioServer(config(root));
+  context.after(() => app.close());
+  const payload = {
+    kind: 'script',
+    filename: 'episode.yaml',
+    content,
+    metadata: {
+      seriesId: 'imported-series',
+      title: '',
+      genre: '',
+      logline: '',
+      episodeId: '',
+    },
+  };
+
+  const preview = await app.inject({
+    method: 'POST',
+    url: '/api/imports/preview',
+    payload,
+  });
+  assert.equal(preview.statusCode, 200);
+  assert.equal(preview.json().ready, true);
+  assert.equal(preview.json().summary.scenes, 5);
+  assert.equal(preview.json().summary.cuts, 15);
+
+  const imported = await app.inject({
+    method: 'POST',
+    url: '/api/imports',
+    payload,
+  });
+  assert.equal(imported.statusCode, 201);
+  assert.equal(imported.json().seriesId, 'imported-series');
+
+  const workspace = await app.inject({
+    method: 'GET',
+    url: '/api/series/imported-series/episodes/EP01/workspace',
+  });
+  assert.equal(workspace.statusCode, 200);
+  assert.equal(workspace.json().assets.characters.length, 2);
+  assert.equal(workspace.json().assets.locations.length, 2);
+});
+
+test('Studio preserves an imported outline as a prefilled source draft', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-amntv-outline-api-'));
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const app = await buildStudioServer(config(root));
+  context.after(() => app.close());
+  const sourceContent =
+    '\n第一集：女主在雨夜回到旧宅，发现母亲留下的账本。她决定从订婚宴开始反击，并在结尾收到匿名警告。\n';
+  const payload = {
+    kind: 'outline',
+    filename: '她从雨夜归来.md',
+    content: sourceContent,
+    metadata: {
+      seriesId: 'rain-return',
+      title: '她从雨夜归来',
+      genre: '女性向复仇',
+      logline: '她带着母亲留下的账本回城复仇。',
+      episodeId: 'EP01',
+    },
+  };
+
+  const preview = await app.inject({
+    method: 'POST',
+    url: '/api/imports/preview',
+    payload,
+  });
+  assert.equal(preview.json().ready, true);
+  assert.equal(preview.json().summary.requiresAgent, true);
+
+  const imported = await app.inject({
+    method: 'POST',
+    url: '/api/imports',
+    payload,
+  });
+  assert.equal(imported.statusCode, 201);
+
+  const series = await app.inject({ method: 'GET', url: '/api/series' });
+  const draft = series.json().series[0].sourceDrafts[0];
+  assert.equal(draft.episodeId, 'EP01');
+  assert.equal(draft.filename, '她从雨夜归来.md');
+  assert.equal(draft.content, sourceContent);
+});
+
+test('Studio imports an existing AI-amnTV project directory without overwriting', async (context) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-amntv-project-api-'));
+  const sourceRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'ai-amntv-project-source-'),
+  );
+  context.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  context.after(() => fs.rmSync(sourceRoot, { recursive: true, force: true }));
+  const source = new ProjectStore(sourceRoot, 'portable-series');
+  seedDemo(source);
+  fs.writeFileSync(path.join(source.paths.root, '.env'), 'SECRET=not-imported\n');
+  fs.mkdirSync(path.join(source.paths.root, 'episodes', '.studio'), {
+    recursive: true,
+  });
+  fs.writeFileSync(
+    path.join(source.paths.root, 'episodes', '.studio', 'private.db'),
+    'not-imported',
+  );
+  const app = await buildStudioServer(config(root));
+  context.after(() => app.close());
+  const payload = {
+    kind: 'project',
+    sourcePath: source.paths.root,
+    targetSeriesId: 'portable-copy',
+  };
+
+  const preview = await app.inject({
+    method: 'POST',
+    url: '/api/imports/preview',
+    payload,
+  });
+  assert.equal(preview.json().ready, true);
+  assert.equal(preview.json().summary.episodes, 1);
+  assert.ok(preview.json().summary.files > 0);
+
+  const imported = await app.inject({
+    method: 'POST',
+    url: '/api/imports',
+    payload,
+  });
+  assert.equal(imported.statusCode, 201);
+  assert.equal(imported.json().seriesId, 'portable-copy');
+  assert.equal(fs.existsSync(path.join(root, 'portable-copy', '.env')), false);
+  assert.equal(
+    fs.existsSync(path.join(root, 'portable-copy', 'episodes', '.studio')),
+    false,
+  );
+
+  const duplicate = await app.inject({
+    method: 'POST',
+    url: '/api/imports/preview',
+    payload,
+  });
+  assert.equal(duplicate.json().ready, false);
+  assert.equal(duplicate.json().conflict, true);
 });
