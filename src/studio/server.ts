@@ -454,7 +454,9 @@ export async function buildStudioServer(
       root: webRoot,
       prefix: '/',
       decorateReply: false,
-      wildcard: false,
+      // wildcard 通配按请求实时读磁盘；固定路由表会在前端重新构建、
+      // 资源 hash 变化后对新文件一律 404（再被 SPA fallback 吞成 text/html）
+      wildcard: true,
     });
   }
 
