@@ -5010,3 +5010,377 @@ input.invalid {
     display: none;
   }
 }
+
+/* ============================================================
+   Canvas-first shell — 首页大输入框 + 画布即工作区（2026-07 重构）
+   ============================================================ */
+
+/* studio 壳不再有侧栏 */
+.canvas-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.canvas-shell .work-area {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-topbar {
+  height: 64px;
+  padding: 0 14px 0 0;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in oklch, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 14;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.canvas-topbar .brand {
+  min-height: 64px;
+  width: auto;
+  border-bottom: 0;
+  border-right: 1px solid var(--line);
+  padding: 0 18px;
+  flex-shrink: 0;
+}
+
+.topbar-context {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-context select {
+  max-width: 190px;
+  height: 34px;
+  border: 1px solid var(--line);
+  padding: 0 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.topbar-context > i {
+  color: var(--faint);
+  font-style: normal;
+}
+
+.topbar-views {
+  height: 38px;
+  border: 1px solid var(--line);
+  padding: 3px;
+  background: var(--panel);
+  display: flex;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.topbar-views button {
+  min-width: 76px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.topbar-views button.active {
+  background: var(--panel-3);
+  color: var(--text);
+}
+
+.topbar-views button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.topbar-actions button {
+  position: relative;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  padding: 0 11px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.topbar-actions button:hover:not(:disabled),
+.topbar-actions button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.topbar-actions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.topbar-actions button > i {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.canvas-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-shell .production-workbench {
+  height: auto;
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.canvas-shell .workbench-error {
+  top: 12px;
+}
+
+.canvas-shell .empty-state {
+  margin: auto;
+}
+
+/* 空画布：与生产图同底纹，快速开始卡对齐参考图的入口卡 */
+.canvas-blank {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  gap: 22px;
+  padding: 48px 24px;
+  background:
+    linear-gradient(#171a1d 1px, transparent 1px),
+    linear-gradient(90deg, #171a1d 1px, transparent 1px),
+    #101315;
+  background-size: 80px 80px;
+}
+
+.canvas-blank-hint {
+  margin: 0;
+  text-align: center;
+  color: #898f93;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.start-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 236px));
+  justify-content: center;
+  gap: 14px;
+}
+
+.start-cards button {
+  text-align: left;
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px 18px;
+  border: 1px solid #32373b;
+  background: #15191c;
+  color: #f2f4ee;
+  cursor: pointer;
+}
+
+.start-cards button:hover {
+  border-color: #d7ff55;
+}
+
+.start-cards button > span {
+  color: #d7ff55;
+  font: 700 10px/1 "SFMono-Regular", "JetBrains Mono", monospace;
+}
+
+.start-cards strong {
+  font-size: 14px;
+}
+
+.start-cards small {
+  color: #898f93;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.canvas-blank .new-episode {
+  max-width: 660px;
+  border: 1px solid #32373b;
+  padding: 28px;
+  background: #15191c;
+}
+
+/* 画布状态条里的总进度 */
+.statusbar-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
+}
+
+.statusbar-progress > div {
+  flex: 1;
+  height: 3px;
+  overflow: hidden;
+  background: #343a3e;
+}
+
+.statusbar-progress > div i {
+  display: block;
+  height: 100%;
+  background: #d7ff55;
+}
+
+.statusbar-progress > b {
+  color: #d7ff55;
+  font: 700 9px/1 "SFMono-Regular", monospace;
+}
+
+/* 抽屉：画布之外的页面统一从右侧滑出 */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(5, 8, 10, 0.62);
+  backdrop-filter: blur(2px);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer-sheet {
+  width: min(1120px, 94vw);
+  height: 100%;
+  background: var(--bg);
+  border-left: 1px solid var(--line-strong);
+  display: flex;
+  flex-direction: column;
+  animation: drawer-in 0.22s ease;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(28px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-sheet {
+    animation: none;
+  }
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px var(--pad);
+  border-bottom: 1px solid var(--line);
+}
+
+.drawer-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.drawer-head strong {
+  font-size: 15px;
+}
+
+.drawer-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.drawer-close:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--pad);
+}
+
+/* 首页输入框 = 生产图的第一个节点 */
+.home-brief-node {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #2a2e32;
+}
+
+.home-brief-node > span {
+  color: #e6b86a;
+  font: 750 10px/1 "SFMono-Regular", "JetBrains Mono", monospace;
+  letter-spacing: 0.04em;
+}
+
+.home-brief-node > small {
+  color: #6c7175;
+  font-size: 10px;
+}
+
+.home-brief-node > i {
+  margin-left: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #71c99b;
+}
+
+.home-brief-error {
+  margin: 0;
+  padding: 10px 20px 14px;
+  color: #f16d67;
+  font-size: 12px;
+}
+
+.home-skill-hint {
+  align-self: center;
+  color: #6c7175;
+  font-size: 11px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

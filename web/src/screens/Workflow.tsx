@@ -11,7 +11,7 @@ import type {
 } from '../types';
 
 type Point = { x: number; y: number };
-type CanvasView = 'graph' | 'storyboard';
+export type CanvasView = 'graph' | 'storyboard';
 type ScratchKind = 'text' | 'image' | 'video' | 'audio';
 
 interface ScratchNode {
@@ -132,21 +132,25 @@ function scratchLabel(kind: ScratchKind): string {
 export function Workflow({
   workspace,
   jobs,
+  view,
+  agentOpen,
+  onAgentClose,
   onRun,
   onOpen,
 }: {
   workspace: Workspace;
   jobs: StudioJob[];
+  view: CanvasView;
+  agentOpen: boolean;
+  onAgentClose: () => void;
   onRun: (type: JobType) => Promise<void>;
   onOpen: (tab: StudioTab) => void;
 }) {
   const [workflow, setWorkflow] = useState<WorkflowView>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
-  const [view, setView] = useState<CanvasView>('graph');
   const [zoom, setZoom] = useState(0.74);
   const [selectedId, setSelectedId] = useState('script');
-  const [agentOpen, setAgentOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [agentPrompt, setAgentPrompt] = useState(
     () => localStorage.getItem('amntv-home-prompt') ?? '',
@@ -348,48 +352,6 @@ export function Workflow({
 
   return (
     <div className={`production-workbench ${agentOpen ? 'agent-visible' : ''}`}>
-      <header className="workbench-head">
-        <div className="workbench-title">
-          <span className="eyebrow">LIVE PRODUCTION GRAPH</span>
-          <strong>
-            {workspace.series.title} <i>/</i> {workspace.episodeId}
-          </strong>
-        </div>
-        <div className="workbench-progress">
-          <span>必需生产线</span>
-          <div>
-            <i style={{ width: `${workflow?.overallProgress ?? 0}%` }} />
-          </div>
-          <b>{workflow?.overallProgress ?? 0}%</b>
-        </div>
-        <div className="workbench-views">
-          <button
-            className={view === 'graph' ? 'active' : ''}
-            onClick={() => setView('graph')}
-          >
-            工作流
-          </button>
-          <button
-            className={view === 'storyboard' ? 'active' : ''}
-            onClick={() => setView('storyboard')}
-          >
-            故事板
-          </button>
-        </div>
-        <div className="workbench-actions">
-          <button onClick={() => onOpen('import')}>导入</button>
-          <button onClick={() => onOpen('tasks')}>
-            任务 {jobs.filter((job) => job.status === 'running').length || ''}
-          </button>
-          <button
-            className={agentOpen ? 'active' : ''}
-            onClick={() => setAgentOpen((value) => !value)}
-          >
-            Agent
-          </button>
-        </div>
-      </header>
-
       {error && <div className="workbench-error">{error}</div>}
 
       <div className="workbench-body">
@@ -527,6 +489,12 @@ export function Workflow({
               <button onClick={() => setZoom((value) => Math.min(1.15, value + 0.1))}>
                 ＋
               </button>
+              <div className="statusbar-progress" title="必需生产线进度">
+                <div>
+                  <i style={{ width: `${workflow?.overallProgress ?? 0}%` }} />
+                </div>
+                <b>{workflow?.overallProgress ?? 0}%</b>
+              </div>
               <i>拖动节点调整生产图 · 所有执行仍受人工关卡约束</i>
             </div>
           </section>
@@ -593,7 +561,7 @@ export function Workflow({
                   <small>提案模式 · 执行前确认</small>
                 </div>
               </div>
-              <button onClick={() => setAgentOpen(false)}>×</button>
+              <button onClick={onAgentClose}>×</button>
             </header>
 
             <section className="agent-context">

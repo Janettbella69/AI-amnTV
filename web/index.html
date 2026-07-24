@@ -11,6 +11,25 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // 本地工具的兜底崩溃提示：白屏时把错误直接画在页面上
+      window.addEventListener('error', (event) => {
+        document.title =
+          'ERR: ' +
+          (((event.error && event.error.stack) || event.message || '') + '')
+            .split('\n')
+            .slice(0, 2)
+            .join(' | ');
+        const pre = document.createElement('pre');
+        pre.style.cssText =
+          'position:fixed;top:0;left:0;z-index:99999;max-width:100vw;' +
+          'padding:14px 16px;background:#1b0d0e;color:#f16d67;' +
+          'font-size:12px;line-height:1.6;white-space:pre-wrap;';
+        pre.textContent =
+          '前端崩溃: ' + ((event.error && event.error.stack) || event.message);
+        document.body.appendChild(pre);
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

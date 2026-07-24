@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { EmptyState, ProgressBar, StatusTag } from './components/Common';
+import { Drawer } from './components/Drawer';
 import { Assets } from './screens/Assets';
 import { Costs } from './screens/Costs';
 import { Delivery } from './screens/Delivery';
@@ -13,7 +14,7 @@ import { Overview } from './screens/Overview';
 import { ScriptEditor } from './screens/ScriptEditor';
 import { StoryboardEditor } from './screens/StoryboardEditor';
 import { TaskCenter } from './screens/TaskCenter';
-import { Workflow } from './screens/Workflow';
+import { Workflow, type CanvasView } from './screens/Workflow';
 import type {
   CharacterAsset,
   Cut,
@@ -28,31 +29,28 @@ import type {
   Workspace,
 } from './types';
 
-const tabs: Array<[StudioTab, string, string]> = [
-  ['import', '导入', 'IN'],
-  ['workflow', '创作画布', 'WF'],
-  ['overview', '项目总览', 'OV'],
-  ['script', '剧本', 'SC'],
-  ['storyboard', '分镜', 'SB'],
-  ['canvas', '外部引擎', 'EX'],
-  ['keyframes', '关键帧', 'KF'],
-  ['assets', '资产库', 'AS'],
-  ['evaluation', '评测', 'QA'],
-  ['tasks', '任务', 'Q'],
-  ['costs', '成本', '¥'],
-  ['delivery', '交付', 'DL'],
-];
-const studioTabs = new Set(tabs.map(([id]) => id));
+/** 画布之外的页面统一以抽屉 / 浮层形式打开 */
+type DrawerTab = Exclude<StudioTab, 'workflow'>;
+const drawerMeta: Record<DrawerTab, [string, string]> = {
+  import: ['IMPORT', '导入生产资料'],
+  overview: ['OVERVIEW', '项目总览'],
+  script: ['SCRIPT', '剧本'],
+  storyboard: ['STORYBOARD', '分镜编辑'],
+  canvas: ['EXTERNAL ENGINE', '外部生成引擎'],
+  keyframes: ['KEYFRAMES', '关键帧圈选'],
+  assets: ['ASSET LIBRARY', '资产库'],
+  evaluation: ['EVALUATION', '多维评测'],
+  tasks: ['TASKS', '任务队列'],
+  costs: ['COST LEDGER', '成本'],
+  delivery: ['DELIVERY', '交付'],
+};
+const drawerTabs = new Set(Object.keys(drawerMeta));
 
-function initialTab(): StudioTab {
+function initialDrawer(): DrawerTab | null {
   const requested = new URLSearchParams(window.location.search).get('tab');
-  if (requested && studioTabs.has(requested as StudioTab)) {
-    return requested as StudioTab;
-  }
-  const stored = localStorage.getItem('amntv-tab');
-  return stored && studioTabs.has(stored as StudioTab)
-    ? (stored as StudioTab)
-    : 'import';
+  return requested && drawerTabs.has(requested)
+    ? (requested as DrawerTab)
+    : null;
 }
 
 type Theme = 'graphite' | 'paper' | 'projector';
@@ -229,13 +227,17 @@ function NewEpisode({
   onEnqueue: (episodeId: string, outline: string) => Promise<void>;
 }) {
   const sourceDraft = series.sourceDrafts[0];
+  const pendingIdea = () =>
+    localStorage.getItem('amntv-home-prompt') ?? '';
   const [episodeId, setEpisodeId] = useState(
     sourceDraft?.episodeId ?? 'EP01',
   );
-  const [outline, setOutline] = useState(sourceDraft?.content ?? '');
+  const [outline, setOutline] = useState(
+    () => sourceDraft?.content ?? pendingIdea(),
+  );
   useEffect(() => {
     setEpisodeId(sourceDraft?.episodeId ?? 'EP01');
-    setOutline(sourceDraft?.content ?? '');
+    setOutline(sourceDraft?.content ?? pendingIdea());
   }, [series.id, sourceDraft?.content, sourceDraft?.episodeId]);
   const active = jobs.find((job) =>
     ['queued', 'running'].includes(job.status),
@@ -295,7 +297,9 @@ export function App() {
   );
   const [workspace, setWorkspace] = useState<Workspace>();
   const [jobs, setJobs] = useState<StudioJob[]>([]);
-  const [tab, setTab] = useState<StudioTab>(initialTab);
+  const [drawer, setDrawer] = useState<DrawerTab | null>(initialDrawer);
+  const [canvasView, setCanvasView] = useState<CanvasView>('graph');
+  const [agentOpen, setAgentOpen] = useState(true);
   const [theme, setTheme] = useState<Theme>(
     () => (localStorage.getItem('amntv-theme') as Theme | null) ?? 'graphite',
   );
@@ -385,17 +389,17 @@ export function App() {
   }, [loadJobs, refresh]);
 
   useEffect(() => {
-    localStorage.setItem('amntv-tab', tab);
     const url = new URL(window.location.href);
     if (surface === 'studio') {
       url.searchParams.set('view', 'studio');
-      url.searchParams.set('tab', tab);
+      if (drawer) url.searchParams.set('tab', drawer);
+      else url.searchParams.delete('tab');
     } else {
       url.searchParams.delete('view');
       url.searchParams.delete('tab');
     }
     window.history.replaceState({}, '', url);
-  }, [surface, tab]);
+  }, [surface, drawer]);
   useEffect(() => {
     localStorage.setItem('amntv-theme', theme);
   }, [theme]);
@@ -440,8 +444,13 @@ export function App() {
     );
   };
 
-  const content = () => {
-    if (tab === 'import') {
+  const openTab = (next: StudioTab) => {
+    if (next === 'workflow') setDrawer(null);
+    else setDrawer(next);
+  };
+
+  const drawerContent = (target: DrawerTab) => {
+    if (target === 'import') {
       return (
         <ImportCenter
           onComplete={async (result: ImportResult) => {
@@ -449,7 +458,7 @@ export function App() {
             setSeries(values);
             setSeriesId(result.seriesId);
             setEpisodeId(result.episodeId ?? '');
-            setTab('overview');
+            setDrawer(null);
             setNotice(
               result.alreadyAvailable
                 ? '项目已在当前资料库中'
@@ -461,49 +470,12 @@ export function App() {
         />
       );
     }
-    if (!selectedSeries) {
+    if (target === 'tasks') {
       return (
-        <EmptyState
-          title="导入资料或建立新生产线"
-          detail="已有小说、剧本或 AI-amnTV 项目可以直接导入；也可以从空白系列开始。"
-          actions={
-            <>
-              <button
-                className="button primary"
-                onClick={() => setTab('import')}
-              >
-                导入生产资料
-              </button>
-              <button
-                className="button ghost"
-                onClick={() => setNewSeriesOpen(true)}
-              >
-                创建系列
-              </button>
-              <button
-                className="text-button"
-                onClick={() =>
-                  void act('验收样例已创建', async () => {
-                    const created = await api.createDemo();
-                    setSeriesId(created.seriesId);
-                    setEpisodeId(created.episodeId);
-                  })
-                }
-              >
-                创建 dry-run 样例
-              </button>
-            </>
-          }
-        />
-      );
-    }
-    if (!episodeId) {
-      return (
-        <NewEpisode
-          series={selectedSeries}
+        <TaskCenter
           jobs={jobs}
-          onEnqueue={(nextEpisodeId, outline) =>
-            enqueue('script', { outline }, nextEpisodeId)
+          onCancel={(id) =>
+            void act('排队任务已取消', () => api.cancel(id))
           }
         />
       );
@@ -511,26 +483,16 @@ export function App() {
     if (!workspace) {
       return (
         <EmptyState
-          title={loading ? '正在读取项目' : '无法读取分集'}
-          detail={error || '请检查本地项目文件是否完整。'}
+          title="需要先准备一个分集"
+          detail="该页面依赖当前分集的生产数据；请先在画布上创建或导入。"
         />
       );
     }
     const common = { workspace };
-    if (tab === 'overview') {
+    if (target === 'overview') {
       return <Overview {...common} jobs={jobs} onRun={(type) => void enqueue(type)} />;
     }
-    if (tab === 'workflow') {
-      return (
-        <Workflow
-          {...common}
-          jobs={jobs}
-          onRun={(type) => enqueue(type)}
-          onOpen={setTab}
-        />
-      );
-    }
-    if (tab === 'script') {
+    if (target === 'script') {
       return (
         <ScriptEditor
           script={workspace.script}
@@ -543,7 +505,7 @@ export function App() {
         />
       );
     }
-    if (tab === 'storyboard') {
+    if (target === 'storyboard') {
       return (
         <StoryboardEditor
           storyboard={workspace.storyboard}
@@ -559,8 +521,8 @@ export function App() {
         />
       );
     }
-    if (tab === 'canvas') return <LibTvCanvas {...common} />;
-    if (tab === 'keyframes') {
+    if (target === 'canvas') return <LibTvCanvas {...common} />;
+    if (target === 'keyframes') {
       return (
         <Keyframes
           {...common}
@@ -570,7 +532,7 @@ export function App() {
         />
       );
     }
-    if (tab === 'assets') {
+    if (target === 'assets') {
       return (
         <Assets
           {...common}
@@ -585,26 +547,91 @@ export function App() {
         />
       );
     }
-    if (tab === 'evaluation') return <EvaluationCenter {...common} />;
-    if (tab === 'tasks') {
+    if (target === 'evaluation') return <EvaluationCenter {...common} />;
+    if (target === 'costs') return <Costs {...common} />;
+    return <Delivery {...common} onApprove={() => void approve('final')} />;
+  };
+
+  const canvasContent = () => {
+    if (loading) {
+      return <EmptyState title="正在读取项目" detail="正在扫描本地生产资料。" />;
+    }
+    if (!selectedSeries) {
       return (
-        <TaskCenter
-          jobs={jobs}
-          onCancel={(id) =>
-            void act('排队任务已取消', () => api.cancel(id))
-          }
+        <div className="canvas-blank">
+          <p className="canvas-blank-hint">从一个灵感、一份资料或一个样例开始</p>
+          <div className="start-cards">
+            <button onClick={() => setSurface('home')}>
+              <span>IDEA</span>
+              <strong>从灵感开始</strong>
+              <small>回到首页写下一句故事，自动建立系列</small>
+            </button>
+            <button onClick={() => setDrawer('import')}>
+              <span>SRC</span>
+              <strong>导入已有内容</strong>
+              <small>小说 / 结构化剧本 / AI-amnTV 项目</small>
+            </button>
+            <button
+              onClick={() =>
+                void act('验收样例已创建', async () => {
+                  const created = await api.createDemo();
+                  setSeriesId(created.seriesId);
+                  setEpisodeId(created.episodeId);
+                })
+              }
+            >
+              <span>DEMO</span>
+              <strong>跑一个 dry-run 样例</strong>
+              <small>不调用云服务，验证完整出片链路</small>
+            </button>
+            <button onClick={() => setNewSeriesOpen(true)}>
+              <span>NEW</span>
+              <strong>新建空白系列</strong>
+              <small>自己填写系列 ID、题材与一句话故事</small>
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (!episodeId) {
+      return (
+        <div className="canvas-blank">
+          <NewEpisode
+            series={selectedSeries}
+            jobs={jobs}
+            onEnqueue={(nextEpisodeId, outline) =>
+              enqueue('script', { outline }, nextEpisodeId)
+            }
+          />
+        </div>
+      );
+    }
+    if (!workspace) {
+      return (
+        <EmptyState
+          title="无法读取分集"
+          detail={error || '请检查本地项目文件是否完整。'}
         />
       );
     }
-    if (tab === 'costs') return <Costs {...common} />;
-    return <Delivery {...common} onApprove={() => void approve('final')} />;
+    return (
+      <Workflow
+        workspace={workspace}
+        jobs={jobs}
+        view={canvasView}
+        agentOpen={agentOpen}
+        onAgentClose={() => setAgentOpen(false)}
+        onRun={(type) => enqueue(type)}
+        onOpen={openTab}
+      />
+    );
   };
 
   const activeJob = jobs.find((job) =>
     ['queued', 'running'].includes(job.status),
   );
-  const enterStudio = (nextTab: StudioTab) => {
-    setTab(nextTab);
+  const enterStudio = (nextDrawer: DrawerTab | null = null) => {
+    setDrawer(nextDrawer);
     setSurface('studio');
   };
 
@@ -614,7 +641,19 @@ export function App() {
         <Home
           series={series}
           workspace={workspace}
-          onEnter={enterStudio}
+          onLaunched={(id) => {
+            setSeriesId(id);
+            setEpisodeId('');
+            setAgentOpen(true);
+            void loadSeries();
+            enterStudio();
+          }}
+          onOpenSeries={(id) => {
+            setSeriesId(id);
+            enterStudio();
+          }}
+          onImport={() => enterStudio('import')}
+          onEnterStudio={() => enterStudio()}
           onCreate={() => setNewSeriesOpen(true)}
         />
         <NewSeriesDialog
@@ -623,9 +662,9 @@ export function App() {
           onCreated={(id) => {
             setNewSeriesOpen(false);
             setSeriesId(id);
-            setSurface('studio');
-            setTab('workflow');
+            setEpisodeId('');
             void loadSeries();
+            enterStudio();
           }}
         />
       </div>
@@ -633,109 +672,96 @@ export function App() {
   }
 
   return (
-    <div className="studio" data-theme={theme} data-density={density}>
-      <aside className="sidebar">
-        <button
-          className="brand"
-          title="返回官网首页"
-          onClick={() => setSurface('home')}
-        >
-          <span className="brand-mark">AM</span>
-          <div>
-            <strong>AI-amnTV</strong>
-            <small>PRODUCTION OS</small>
-          </div>
-        </button>
-        <div className="series-switcher">
-          <label htmlFor="series-select">系列</label>
-          <select
-            id="series-select"
-            value={seriesId}
-            onChange={(event) => setSeriesId(event.target.value)}
-          >
-            {!series.length && <option value="">尚无系列</option>}
-            {series.map((item) => (
-              <option value={item.id} key={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="episode-select">分集</label>
-          <select
-            id="episode-select"
-            value={episodeId}
-            disabled={!selectedSeries?.episodeIds.length}
-            onChange={(event) => setEpisodeId(event.target.value)}
-          >
-            {!selectedSeries?.episodeIds.length && (
-              <option value="">尚无分集</option>
-            )}
-            {selectedSeries?.episodeIds.map((id) => (
-              <option key={id}>{id}</option>
-            ))}
-          </select>
-        </div>
-        <nav className="main-nav" aria-label="工作台页面">
-          {tabs.map(([id, label, code]) => (
-            <button
-              key={id}
-              className={tab === id ? 'active' : ''}
-              onClick={() => setTab(id)}
-              disabled={
-                !workspace && !['import', 'overview', 'tasks'].includes(id)
-              }
-            >
-              <span>{code}</span>
-              {label}
-              {id === 'tasks' &&
-                jobs.filter((job) => job.status === 'running').length > 0 && (
-                  <i />
-                )}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <button
-            className="text-button import-link"
-            onClick={() => setTab('import')}
-          >
-            导入资料
-          </button>
-          <button
-            className="text-button new-link"
-            onClick={() => setNewSeriesOpen(true)}
-          >
-            新建系列
-          </button>
-          <span>本地文件为事实源</span>
-        </div>
-      </aside>
-
+    <div className="studio canvas-shell" data-theme={theme} data-density={density}>
       <div className="work-area">
-        <header className="topbar">
-          <div className="production-title">
-            <span>
-              {workspace?.series.genre ?? selectedSeries?.genre ?? 'AI 漫剧'}
-            </span>
-            <strong>
-              {tab === 'import'
-                ? '导入生产资料'
-                : tab === 'workflow'
-                  ? 'AI 漫剧创作画布'
-                : tab === 'canvas'
-                  ? '外部生成引擎'
-                  : tab === 'evaluation'
-                    ? '多维评测中心'
-                : workspace?.series.title ??
-                  selectedSeries?.title ??
-                  '制片工作台'}
-            </strong>
+        <header className="canvas-topbar">
+          <button
+            className="brand"
+            title="返回首页"
+            onClick={() => setSurface('home')}
+          >
+            <span className="brand-mark">AM</span>
+            <div>
+              <strong>AI-amnTV</strong>
+              <small>PRODUCTION OS</small>
+            </div>
+          </button>
+          <div className="topbar-context">
+            <select
+              aria-label="系列"
+              value={seriesId}
+              onChange={(event) => setSeriesId(event.target.value)}
+            >
+              {!series.length && <option value="">尚无系列</option>}
+              {series.map((item) => (
+                <option value={item.id} key={item.id}>
+                  {item.title}
+                </option>
+              ))}
+            </select>
+            <i>/</i>
+            <select
+              aria-label="分集"
+              value={episodeId}
+              disabled={!selectedSeries?.episodeIds.length}
+              onChange={(event) => setEpisodeId(event.target.value)}
+            >
+              {!selectedSeries?.episodeIds.length && (
+                <option value="">尚无分集</option>
+              )}
+              {selectedSeries?.episodeIds.map((id) => (
+                <option key={id}>{id}</option>
+              ))}
+            </select>
             {workspace && (
               <StatusTag
                 value={workspace.state.gates.final ? 'PICTURE LOCK' : 'IN PRODUCTION'}
                 tone={workspace.state.gates.final ? 'good' : 'warn'}
               />
             )}
+          </div>
+          <div className="topbar-views" role="tablist" aria-label="画布视图">
+            <button
+              role="tab"
+              aria-selected={canvasView === 'graph'}
+              className={canvasView === 'graph' ? 'active' : ''}
+              disabled={!workspace}
+              onClick={() => setCanvasView('graph')}
+            >
+              工作流
+            </button>
+            <button
+              role="tab"
+              aria-selected={canvasView === 'storyboard'}
+              className={canvasView === 'storyboard' ? 'active' : ''}
+              disabled={!workspace}
+              onClick={() => setCanvasView('storyboard')}
+            >
+              故事板
+            </button>
+          </div>
+          <div className="topbar-actions">
+            <button
+              disabled={!workspace}
+              onClick={() => setDrawer('overview')}
+            >
+              总览
+            </button>
+            <button onClick={() => setDrawer('tasks')}>
+              任务
+              {jobs.some((job) => job.status === 'running') && <i />}
+            </button>
+            <button disabled={!workspace} onClick={() => setDrawer('costs')}>
+              成本
+            </button>
+            <button onClick={() => setDrawer('import')}>导入</button>
+            <button
+              className={agentOpen ? 'active' : ''}
+              disabled={!workspace}
+              onClick={() => setAgentOpen((value) => !value)}
+            >
+              Agent
+            </button>
           </div>
           <div className="tweaks" aria-label="外观调整">
             <span>环境</span>
@@ -775,10 +801,19 @@ export function App() {
           </div>
         )}
         {notice && <div className="toast">{notice}</div>}
-        <main className={tab === 'workflow' ? 'screen screen-canvas' : 'screen'}>
-          {content()}
+        <main className="screen screen-canvas canvas-main">
+          {canvasContent()}
         </main>
       </div>
+
+      <Drawer
+        open={drawer !== null}
+        eyebrow={drawer ? drawerMeta[drawer][0] : ''}
+        title={drawer ? drawerMeta[drawer][1] : ''}
+        onClose={() => setDrawer(null)}
+      >
+        {drawer && drawerContent(drawer)}
+      </Drawer>
 
       <NewSeriesDialog
         open={newSeriesOpen}
@@ -786,6 +821,7 @@ export function App() {
         onCreated={(id) => {
           setNewSeriesOpen(false);
           setSeriesId(id);
+          setEpisodeId('');
           void loadSeries();
         }}
       />
